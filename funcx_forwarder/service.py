@@ -14,8 +14,8 @@ import threading
 from flask import Flask, jsonify
 from flask import request
 
-from forwarder.version import VERSION, MIN_EP_VERSION
-from forwarder.forwarderobject import spawn_forwarder
+from funcx_forwarder.version import VERSION, MIN_EP_VERSION
+from funcx_forwarder.forwarderobject import spawn_forwarder
 
 
 app = Flask(__name__)

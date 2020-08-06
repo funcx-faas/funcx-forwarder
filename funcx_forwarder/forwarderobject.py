@@ -24,11 +24,11 @@ import os
 # sys.path = sys.path[3:]
 # print(sys.path)
 
-from forwarder import set_file_logger
-from forwarder.endpoint_db import EndpointDB
-from forwarder.queues import RedisQueue
-from forwarder.queues.redis.redis_q import EndpointQueue
-from forwarder.queues.redis.tasks import Task, TaskState, status_code_convert
+from funcx_forwarder import set_file_logger
+from funcx_forwarder.endpoint_db import EndpointDB
+from funcx_forwarder.queues import RedisQueue
+from funcx_forwarder.queues.redis.redis_q import EndpointQueue
+from funcx_forwarder.queues.redis.tasks import Task, TaskState, status_code_convert
 
 
 def double(x):

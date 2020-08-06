@@ -14,8 +14,8 @@ venv/*
 web/*
 api/*
 .idea/*
-forwarder/.idea/*
-forwarder/.idea/forwarder.iml
+funcx_forwarder/.idea/*
+funcx_forwarder/.idea/forwarder.iml
 *.iml
 .DS_Store
 
