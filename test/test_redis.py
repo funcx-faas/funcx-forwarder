@@ -1,17 +1,20 @@
 import argparse
-from funcx.serialize import FuncXSerializer
-# from funcx.queues import RedisQueue
-from forwarderservice.queues import RedisQueue
 import time
+
+from funcx.serialize import FuncXSerializer
+
+from funcx_forwarder.queues import RedisQueue
+
 
 def slow_double(i, duration=0):
     import time
     time.sleep(duration)
-    return i*4
+    return i * 2
+
 
 def test(endpoint_id=None, tasks=10, duration=1, hostname=None, port=None):
     tasks_rq = RedisQueue(f'task_{endpoint_id}', hostname)
-    results_rq = RedisQueue(f'results', hostname)
+    results_rq = RedisQueue('results', hostname)
     fxs = FuncXSerializer()
 
     ser_code = fxs.serialize(slow_double)
@@ -19,8 +22,8 @@ def test(endpoint_id=None, tasks=10, duration=1, hostname=None, port=None):
 
     while True:
         try:
-            x = results_rq.get(timeout=1)
-        except:
+            _ = results_rq.get(timeout=1)
+        except Exception:
             print("No more results left")
             break
 
@@ -29,7 +32,7 @@ def test(endpoint_id=None, tasks=10, duration=1, hostname=None, port=None):
     start = time.time()
     for i in range(tasks):
         ser_args = fxs.serialize([i])
-        ser_kwargs = fxs.serialize({'duration':duration})
+        ser_kwargs = fxs.serialize({'duration': duration})
         input_data = fxs.pack_buffers([ser_args, ser_kwargs])
         payload = fn_code + input_data
         # container_id = "odd" if i%2 else "even"
@@ -62,9 +65,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-
     test(endpoint_id=args.endpoint_id,
          hostname=args.redis_hostname,
          duration=int(args.duration),
          tasks=int(args.count))
-

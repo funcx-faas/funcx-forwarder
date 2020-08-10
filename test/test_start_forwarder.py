@@ -1,6 +1,5 @@
 import argparse
-import uuid
-from forwarderservice.forwarder import Forwarder, spawn_forwarder
+from funcx_forwarder.service import spawn_forwarder
 import time
 
 
@@ -25,5 +24,3 @@ if __name__ == "__main__":
     print(fw.connection_info)
     time.sleep(10)
     print(fw)
-
-    

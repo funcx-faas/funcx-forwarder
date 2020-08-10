@@ -6,9 +6,10 @@ import time
 
 
 def double(x):
-    return x*2
+    return x * 2
 
-if __name__ == "__main__" :
+
+if __name__ == "__main__":
 
     set_stream_logger()
 
@@ -20,10 +21,7 @@ if __name__ == "__main__" :
     ports = executor.start()
     print("Connect on ports {}".format(ports))
 
-
     print("Submitting")
     fu = executor.submit(double, *[2])
     print("Submitted")
     time.sleep(600)
-          
-    
