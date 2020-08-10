@@ -1,3 +1,3 @@
 pip install -q -e .
-[ -d "/funcx" ] && pip install -q -e /funcx
-python3 forwarder/service.py -a forwarder -r mockredis --debug
+#[ -d "/funcx" ] && pip install -q -e /funcx
+uwsgi --ini funcx_forwarder.ini
