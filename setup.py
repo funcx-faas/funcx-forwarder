@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 version_ns = {}
-with open(os.path.join("forwarder", "version.py")) as f:
+with open(os.path.join("funcx_forwarder", "version.py")) as f:
     exec(f.read(), version_ns)
 version = version_ns['VERSION']
 print("Version : ", version)
