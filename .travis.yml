@@ -9,7 +9,6 @@ services:
 #      - sudo apt-get update -q
 
 install:
-      - cd forwarder
       - python$PY -m pip install .
 
 script:
