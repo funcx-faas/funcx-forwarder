@@ -1,9 +1,11 @@
 import argparse
 import time
+import uuid
 
 from funcx.serialize import FuncXSerializer
 
-from funcx_forwarder.queues import RedisQueue
+from funcx_forwarder.queues import EndpointQueue
+from funcx_forwarder.queues.redis.tasks import Task
 
 
 def slow_double(i, duration=0):
@@ -12,32 +14,25 @@ def slow_double(i, duration=0):
     return i * 2
 
 
-def test(endpoint_id=None, tasks=10, duration=1, hostname=None, port=None):
-    tasks_rq = RedisQueue(f'task_{endpoint_id}', hostname)
-    results_rq = RedisQueue('results', hostname)
+def dont_run_yet(endpoint_id=None, tasks=10, duration=1, hostname=None):
+    tasks_rq = EndpointQueue(f'task_{endpoint_id}', hostname)
     fxs = FuncXSerializer()
 
     ser_code = fxs.serialize(slow_double)
     fn_code = fxs.pack_buffers([ser_code])
 
-    while True:
-        try:
-            _ = results_rq.get(timeout=1)
-        except Exception:
-            print("No more results left")
-            break
-
     tasks_rq.connect()
-    results_rq.connect()
     start = time.time()
     for i in range(tasks):
+        task_id = str(uuid.uuid4())
         ser_args = fxs.serialize([i])
         ser_kwargs = fxs.serialize({'duration': duration})
         input_data = fxs.pack_buffers([ser_args, ser_kwargs])
         payload = fn_code + input_data
-        # container_id = "odd" if i%2 else "even"
         container_id = "RAW"
-        tasks_rq.put(f"0{i};{container_id}", 'task', payload)
+        task = Task(tasks_rq.redis_client, task_id, container_id, serializer="", payload=payload)
+        tasks_rq.enqueue(task)
+
     d1 = time.time() - start
     print("Time to launch {} tasks: {:8.3f} s".format(tasks, d1))
 
@@ -65,7 +60,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    test(endpoint_id=args.endpoint_id,
-         hostname=args.redis_hostname,
-         duration=int(args.duration),
-         tasks=int(args.count))
+    # test(endpoint_id=args.endpoint_id,
+    #      hostname=args.redis_hostname,
+    #      duration=int(args.duration),
+    #      tasks=int(args.count))
