@@ -14,5 +14,5 @@ install:
 
 script:
       - pip install -r test-requirements.txt
-      - #flake8 forwarder
-      - python$PY -c "import forwarder"
+      - flake8 --config funcx_forwarder.ini funcx_forwarder
+      - python$PY -c "import funcx_forwarder"
