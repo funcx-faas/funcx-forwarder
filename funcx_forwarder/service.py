@@ -42,7 +42,6 @@ def get_map_json():
     """
     results = []
     redis_client = app.config['redis_client']
-    csv_string = "org,core_hrs,lat,long\n</br>"
     for key in redis_client.keys('ep_status_*'):
         try:
             print("Getting key {}".format(key))
@@ -73,7 +72,6 @@ def get_map_json():
 def get_map():
     """ Paint a map of utilization
     """
-    results = {"data": []}
     redis_client = app.config['redis_client']
     csv_string = "org,core_hrs,lat,long\n</br>"
     for key in redis_client.keys('ep_status_*'):

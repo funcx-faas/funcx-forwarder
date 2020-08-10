@@ -11,22 +11,12 @@ import requests
 import zmq
 from funcx.executors import HighThroughputExecutor as HTEX
 from funcx.executors.high_throughput.executor import logger as executorLogger
-from funcx.executors.high_throughput.messages import Heartbeat
 from funcx.serialize import FuncXSerializer
 from parsl.channels import LocalChannel
 from parsl.providers import LocalProvider
 
-import os
-# import sys
-# print(sys.path)
-# sys.path.insert(0, "/opt/forwarder")
-# print(sys.path)
-# sys.path = sys.path[3:]
-# print(sys.path)
-
 from funcx_forwarder import set_file_logger
 from funcx_forwarder.endpoint_db import EndpointDB
-from funcx_forwarder.queues import RedisQueue
 from funcx_forwarder.queues.redis.redis_q import EndpointQueue
 from funcx_forwarder.queues.redis.tasks import Task, TaskState, status_code_convert
 
@@ -37,6 +27,7 @@ def double(x):
 
 def failer(x):
     return x / 0
+
 
 loglevels = {50: 'CRITICAL',
              40: 'ERROR',
@@ -101,11 +92,13 @@ class Forwarder(Process):
 
         global logger
         logger = logging.getLogger(endpoint_id)
-        
+
         if len(logger.handlers) == 0:
-            logger = set_file_logger(os.path.join(self.logdir, "forwarder.{}.log".format(endpoint_id)),
-                                    name=endpoint_id,
-                                    level=logging_level)
+            logger = set_file_logger(
+                os.path.join(self.logdir, "forwarder.{}.log".format(endpoint_id)),
+                name=endpoint_id,
+                level=logging_level
+            )
 
         logger.info("Initializing forwarder for endpoint:{}".format(endpoint_id))
         logger.info("Log level set to {}".format(loglevels[logging_level]))
@@ -170,8 +163,8 @@ class Forwarder(Process):
     def _endpoint_heartbeat_fail(self):
         """Return true if too many heartbeats have been missed"""
         return int(time.time() - self.executor.last_response_time) > \
-                    (self.max_heartbeats_missed * self.heartbeat_period)
-    
+            (self.max_heartbeats_missed * self.heartbeat_period)
+
     def _heartbeat_loop(self, kill_event):
         while not kill_event.is_set():
             logger.info("Activating executor.send_heartbeat()")
@@ -196,7 +189,6 @@ class Forwarder(Process):
                 logger.info(f"Updating Task({task_id}) to status={status}")
                 task = Task.from_id(self.task_q.redis_client, task_id)
                 task.status = status
-
 
     def task_loop(self):
         """ Task Loop
@@ -299,7 +291,7 @@ class Forwarder(Process):
 
         self._heartbeat_thread.start()
         self._task_status_thread.start()
-        
+
         # Start the task loop
         while True:
             logger.info("[MAIN] Endpoint is now online")

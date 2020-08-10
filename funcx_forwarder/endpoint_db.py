@@ -6,6 +6,8 @@ import time
 # from forwarder.queues.base import FuncxQueue, NotConnected
 import json
 
+from funcx.queues.base import NotConnected
+
 
 class EndpointDB(object):
     """ A basic redis DB
@@ -45,7 +47,7 @@ class EndpointDB(object):
                                                                                   self.port))
             raise
 
-    def get(self, endpoint_id, timeout=1, last=60*4):
+    def get(self, endpoint_id, timeout=1, last=60 * 4):
         """ Get an item from the redis queue
 
         Parameters
@@ -102,7 +104,8 @@ class EndpointDB(object):
            Timeout for the blocking get in seconds
         """
         try:
-            # self.redis_client
+            raise Exception("this method isn't ready hah")
+            endpoint_id = last = None
             end = min(self.redis_client.llen(f'ep_status_{endpoint_id}'), last)
             print("Total len :", end)
             items = self.redis_client.lrange(f'ep_status_{endpoint_id}', 0, end)
@@ -137,7 +140,7 @@ class EndpointDB(object):
             self.redis_client.lpush(f'ep_status_{endpoint_id}', json.dumps(payload))
             if 'new_core_hrs' in payload:
                 self.redis_client.incrbyfloat('funcx_worldwide_counter', amount=payload['new_core_hrs'])
-            self.redis_client.ltrim(f'ep_status_{endpoint_id}', 0, 2880) # Keep 2 x 24hr x 60 min worth of logs
+            self.redis_client.ltrim(f'ep_status_{endpoint_id}', 0, 2880)  # Keep 2 x 24hr x 60 min worth of logs
 
         except AttributeError:
             raise NotConnected(self)
@@ -165,7 +168,7 @@ def test():
     rq.connect()
     ep_id = str(uuid.uuid4())
     for i in range(20):
-        rq.put(ep_id, {'c': i, 'm': i*100})
+        rq.put(ep_id, {'c': i, 'm': i * 100})
 
     res = rq.get(ep_id, timeout=1)
     print("Result : ", res)

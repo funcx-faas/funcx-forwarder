@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
-from forwarderservice.errors import FuncxError
+from funcx_forwarder.errors import FuncxError
+
 
 class NotConnected(FuncxError):
     """ Queue is not connected/active
