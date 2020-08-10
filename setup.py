@@ -11,7 +11,7 @@ with open('requirements.txt') as f:
     install_requires = f.readlines()
 
 setup(
-    name='forwarder',
+    name='funcx_forwarder',
     version=version,
     packages=find_packages(),
     description='funcX Forwarder: High Performance Function Serving for Science',
