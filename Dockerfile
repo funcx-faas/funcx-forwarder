@@ -14,5 +14,6 @@ ENV PYTHONPATH "${PYTHONPATH}:/opt/funcx-forwarder"
 
 USER uwsgi
 EXPOSE 55000-56000
+EXPOSE 3031
 CMD sh entrypoint.sh
 
