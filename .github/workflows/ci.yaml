@@ -45,7 +45,7 @@ jobs:
       run: echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF##*/})"
       id: extract_tag_name
 
-    - name: Build funcX-web-service Image
+    - name: Build funcx-forwarder Image
       uses: elgohr/Publish-Docker-Github-Action@master
       with:
         name: funcx/forwarder:${{ steps.extract_tag_name.outputs.imagetag }}
