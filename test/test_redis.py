@@ -23,6 +23,7 @@ def dont_run_yet(endpoint_id=None, tasks=10, duration=1, hostname=None):
 
     tasks_rq.connect()
     start = time.time()
+    task_ids = {}
     for i in range(tasks):
         task_id = str(uuid.uuid4())
         ser_args = fxs.serialize([i])
@@ -32,14 +33,20 @@ def dont_run_yet(endpoint_id=None, tasks=10, duration=1, hostname=None):
         container_id = "RAW"
         task = Task(tasks_rq.redis_client, task_id, container_id, serializer="", payload=payload)
         tasks_rq.enqueue(task)
+        task_ids[i] = task_id
 
     d1 = time.time() - start
     print("Time to launch {} tasks: {:8.3f} s".format(tasks, d1))
 
     print(f"Launched {tasks} tasks")
     for i in range(tasks):
-        res = results_rq.get('result', timeout=300)
-        print("Result : ", res)
+        task_id = task_ids[i]
+        task = Task.from_id(tasks_rq.redis_client, task_id)
+        # TODO: wait for task result...
+        time.sleep(2)
+        print(f"Result: {task.result}")
+        # res = results_rq.get('result', timeout=300)
+        # print("Result : ", res)
 
     delta = time.time() - start
     print("Time to complete {} tasks: {:8.3f} s".format(tasks, delta))
