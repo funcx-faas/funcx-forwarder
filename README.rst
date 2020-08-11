@@ -1,6 +1,7 @@
 FuncX Forwarder Service
 =======================
 
+The Forwarder service runs in a container on Flask behind uWSGI.  uWSGI listens on port 3031.
 
 This is a REST micro service that handles requests for initializing Forwarders to which endpoints will connect.
 This service will have the following routes:
