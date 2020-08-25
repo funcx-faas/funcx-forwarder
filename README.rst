@@ -79,3 +79,10 @@ Now, you can start the forwarder service for testing:
 >>> forwarder-service --address 127.0.0.1 --port 50005 --debug
 
 Once you have this running, we can update the endpoint configs to point to this local service.
+
+Docker Container
+================
+
+You can run the service inside a docker container.
+
+>> docker run --rm -it -p 8080:8080 -e "REDIS_HOST=localhost" -e "REDIS_PORT=6123" funcx/forwarder:dev
