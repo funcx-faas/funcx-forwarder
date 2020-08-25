@@ -1,3 +1,2 @@
-pip install -q -e .
-#[ -d "/funcx" ] && pip install -q -e /funcx
+#!/bin/bash
 uwsgi --ini funcx_forwarder.ini

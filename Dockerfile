@@ -7,10 +7,12 @@ RUN apk update && \
 RUN addgroup -S uwsgi && adduser -S uwsgi -G uwsgi
 RUN pip install --disable-pip-version-check uwsgi
 
-COPY . /opt/funcx-forwarder
 WORKDIR /opt/funcx-forwarder
+
+COPY requirements.txt .
 RUN pip install --disable-pip-version-check -q -r ./requirements.txt
-ENV PYTHONPATH "${PYTHONPATH}:/opt/funcx-forwarder"
+
+COPY . /opt/funcx-forwarder
 
 USER uwsgi
 EXPOSE 55000-56000
