@@ -171,7 +171,7 @@ def cli():
 
     try:
         print("Starting forwarder service")
-        app.run(host=args.address, port=int(args.port), debug=True)
+        app.run(host="0.0.0.0", port=int(args.port), debug=True)
 
     except Exception as e:
         # This doesn't do anything

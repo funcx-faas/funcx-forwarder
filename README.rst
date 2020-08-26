@@ -85,4 +85,4 @@ Docker Container
 
 You can run the service inside a docker container.
 
->> docker run --rm -it -p 8080:8080 -e "REDIS_HOST=localhost" -e "REDIS_PORT=6123" funcx/forwarder:dev
+>> docker run --rm -it -p 8080:8080  -e "ADVERTISED_FORWARDER_ADDRESS=host.docker.internal" -e "REDIS_HOST=localhost" -e "REDIS_PORT=6123" funcx/forwarder:dev
