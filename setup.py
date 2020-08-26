@@ -32,7 +32,7 @@ setup(
         "Function Serving"
     ],
     entry_points={'console_scripts':
-                  ['forwarder-service=forwarder.service:cli',
+                  ['forwarder-service=funcx_forwarder.service:cli',
                   ]
     },
     author='funcX team',
