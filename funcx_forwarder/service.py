@@ -164,7 +164,6 @@ def cli():
     parser.add_argument("-x", "--max_ic_port", default=55000,
                         help="Max port range")
 
-
     args = parser.parse_args()
 
     app.config['address'] = args.address
