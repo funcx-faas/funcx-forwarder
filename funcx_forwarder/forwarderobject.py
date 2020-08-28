@@ -322,7 +322,7 @@ def spawn_forwarder(address,
                     executor=None,
                     task_q=None,
                     logging_level=logging.INFO,
-                    interchange_port_range=(54000,55000)):
+                    interchange_port_range=(54000, 55000)):
     """ Spawns a forwarder and returns the forwarder process for tracking.
 
     Parameters
@@ -374,7 +374,7 @@ def spawn_forwarder(address,
                         endpoint_id=endpoint_id,
                         address=address,
                         task_status_queue=task_status_q,
-                        interchange_port_range=interchage_port_range
+                        interchange_port_range=interchange_port_range
                         )
         executorLogger.setLevel(logging_level)
     fw = Forwarder(task_q, task_status_q, executor,
