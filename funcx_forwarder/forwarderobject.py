@@ -351,7 +351,7 @@ def spawn_forwarder(address,
 
     endpoint_id : uuid string
        Endpoint id for which the forwarder is being spawned.
-    
+
     interchange_port_range : (int, int)
        The ports to select from for interchanges to connect to
 
