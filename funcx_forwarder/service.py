@@ -122,7 +122,9 @@ def register():
                          endpoint_details['redis_address'],
                          endpoint_id,
                          endpoint_addr=endpoint_details['endpoint_addr'],
-                         logging_level=logging.DEBUG if app.debug else logging.INFO)
+                         logging_level=logging.DEBUG if app.debug else logging.INFO,
+                         interchange_port_range=(app.config['min_ic_port'],
+                                                 app.config['max_ic_port']))
 
     connection_info = fw.connection_info
 
@@ -157,11 +159,18 @@ def cli():
                         help="Redis port")
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
+    parser.add_argument("-m", "--min_ic_port", default=54000,
+                        help="Min port range")
+    parser.add_argument("-x", "--max_ic_port", default=55000,
+                        help="Max port range")
+
 
     args = parser.parse_args()
 
     app.config['address'] = args.address
     app.config['ep_mapping'] = {}
+    app.config['min_ic_port'] = args.min_ic_port
+    app.config['max_ic_port'] = args.max_ic_port
 
     app.config['redis_client'] = redis.StrictRedis(
         host=args.redishost,
