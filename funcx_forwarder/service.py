@@ -119,7 +119,7 @@ def register():
     # no endpoint connected.
     endpoint_id = endpoint_details['endpoint_id']
     fw = spawn_forwarder(app.config['address'],
-                         endpoint_details['redis_address'],
+                         app.config['redis_address'],
                          endpoint_id,
                          endpoint_addr=endpoint_details['endpoint_addr'],
                          logging_level=logging.DEBUG if app.debug else logging.INFO,
@@ -170,7 +170,7 @@ def cli():
     app.config['ep_mapping'] = {}
     app.config['min_ic_port'] = args.min_ic_port
     app.config['max_ic_port'] = args.max_ic_port
-
+    app.config['redis_address'] = args.redishost
     app.config['redis_client'] = redis.StrictRedis(
         host=args.redishost,
         port=int(args.redisport),
