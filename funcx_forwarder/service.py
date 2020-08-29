@@ -160,9 +160,9 @@ def cli():
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
     parser.add_argument("-m", "--min_ic_port", default=54000,
-                        help="Min port range")
+                        help="Min port range", type=int)
     parser.add_argument("-x", "--max_ic_port", default=55000,
-                        help="Max port range")
+                        help="Max port range", type=int)
 
     args = parser.parse_args()
 
