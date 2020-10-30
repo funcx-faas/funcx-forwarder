@@ -9,8 +9,8 @@ from multiprocessing import Queue
 
 import requests
 import zmq
-from funcx.executors import HighThroughputExecutor as HTEX
-from funcx.executors.high_throughput.executor import logger as executorLogger
+from funcx_endpoint.executors import HighThroughputExecutor as HTEX
+from funcx_endpoint.executors.high_throughput.executor import logger as executorLogger
 from funcx.serialize import FuncXSerializer
 from parsl.channels import LocalChannel
 from parsl.providers import LocalProvider
