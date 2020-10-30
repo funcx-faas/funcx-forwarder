@@ -78,6 +78,7 @@ class Task:
     endpoint = RedisField()
     container = RedisField()
     data_url = RedisField()
+    recursive = RedisField()
     payload = RedisField(serializer=json.dumps, deserializer=json.loads)
     result = RedisField()
     exception = RedisField()
@@ -92,6 +93,7 @@ class Task:
                  container: str = "",
                  serializer: str = "",
                  data_url: str = "",
+                 recursive: str = "",
                  payload: str = ""):
         """ If the kwargs are passed, then they will be overwritten.  Otherwise, they will gotten from existing
         task entry.
@@ -126,6 +128,9 @@ class Task:
         if data_url:
             self.data_url = data_url
 
+        if recursive:
+            self.recursive = recursive
+
         if payload:
             self.payload = payload
 
@@ -147,7 +152,7 @@ class Task:
     def _generate_header(self):
         """Used to pass bits of information to EP"""
         print(self.data_url)
-        return f'{self.task_id};{self.container};{self.serializer};{self.data_url}'
+        return f'{self.task_id};{self.container};{self.serializer};{self.data_url};{self.recursive}'
 
     @classmethod
     def exists(cls, rc: StrictRedis, task_id: str):
