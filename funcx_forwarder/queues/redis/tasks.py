@@ -151,7 +151,6 @@ class Task:
 
     def _generate_header(self):
         """Used to pass bits of information to EP"""
-        print(self.data_url)
         return f'{self.task_id};{self.container};{self.serializer};{self.data_url};{self.recursive}'
 
     @classmethod
