@@ -16,10 +16,11 @@ def slow_double(i, duration=0):
         data = f.readlines()
     return data
 
+
 def recursive(i, duration=0):
     if duration >= 3:
         return duration
-    return recursive(i, duration+1)
+    return recursive(i, duration + 1)
 
 
 def test(endpoint_id=None, tasks=10, duration=1, hostname=None):
@@ -43,7 +44,7 @@ def test(endpoint_id=None, tasks=10, duration=1, hostname=None):
                     task_id,
                     container_id,
                     serializer="",
-                    data_url="globus://af7bda53-6d04-11e5-ba46-22000b92c6ec/~/globus_test",
+                    data_url="globus://af7bda53-6d04-11e5-ba46-22000b92c6ec/~/globus_tes",
                     recursive="True",
                     payload=payload)
         print(task.__dict__)
@@ -59,7 +60,7 @@ def test(endpoint_id=None, tasks=10, duration=1, hostname=None):
         task_id = task_ids[i]
         task = Task.from_id(tasks_rq.redis_client, task_id)
         print(task.__dict__)
-        #if task_result or task_exception:
+        # if task_result or task_exception:
         #    task.delete()
         # TODO: wait for task result...
         # print(task.status, task.header, task.payload, task.result, task.exception)
@@ -75,7 +76,6 @@ def test(endpoint_id=None, tasks=10, duration=1, hostname=None):
             else:
                 print("Current task state: {}".format(task.status))
                 time.sleep(2)
-            
         # res = results_rq.get('result', timeout=300)
         # print("Result : ", res)
 
