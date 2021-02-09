@@ -336,7 +336,7 @@ class Forwarder(Process):
             try:
                 # timeout in ms # Update to 0ms
                 b_ep_id, b_message = self.results_q.get(block=False, timeout=1)
-                # logger.debug(f"Message from results_q : {b_message}")
+
                 try:
                     message = pickle.loads(b_message)
                 except Exception:
@@ -347,6 +347,8 @@ class Forwarder(Process):
                     continue
 
                 task = RedisTask.from_id(self.redis_pubsub.redis_client, message['task_id'])
+                logger.debug(f"Received message : {message}")
+                logger.debug(f"Task info : {task}")
 
                 # TODO: What does the res_dict look like?  Can we just set task.result=res_dict?
                 if 'result' in message:
