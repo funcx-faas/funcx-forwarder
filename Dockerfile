@@ -1,7 +1,7 @@
 FROM python:3.7-alpine
 
 RUN apk update && \
-    apk add --no-cache gcc musl-dev linux-headers libffi-dev libressl-dev make g++ git
+    apk add --no-cache gcc musl-dev linux-headers libffi-dev libressl-dev make g++ git python3-dev openssl-dev cargo
 
 # Create a group and user
 RUN addgroup -S funcx && adduser -S funcx -G funcx
