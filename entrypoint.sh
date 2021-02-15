@@ -3,9 +3,6 @@ python3 -c "import funcx; print('funcx Version : ', funcx.__version__)"
 python3 -c "import funcx_endpoint; print('funcx_endpoint Version : ', funcx_endpoint.__version__)"
 python3 -c "import funcx_forwarder; print('funcx_forwarder Version : ', funcx_forwarder.__version__)"
 
-echo "DEBUG: Overriding REDIS_HOST: $REDIS_HOST with FUNCX_REDIS_MASTER_SERVICE_HOST: $FUNCX_REDIS_MASTER_SERVICE_HOST"
-export REDIS_HOST=$FUNCX_REDIS_MASTER_SERVICE_HOST
-
 cat <<EOF > wait_for_redis.py
 import redis
 import time
