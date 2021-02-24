@@ -1,23 +1,20 @@
-FROM python:3.7-alpine3.13
-
-RUN apk update && \
-    apk add --no-cache gcc musl-dev linux-headers libffi-dev libressl-dev make g++ git python3-dev openssl-dev cargo
+FROM python:3.7
 
 # Create a group and user
-RUN addgroup -S funcx && adduser -S funcx -G funcx
+RUN addgroup funcx && useradd -g funcx funcx
+
 WORKDIR /opt/funcx-forwarder
 
 RUN pip install -U pip
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
 COPY . /opt/funcx-forwarder
 RUN pip install .
 
-USER funcx
+# @ben, any ideas on why switching user doesn't seem to work here
+# USER funcx
 WORKDIR /home/funcx
-EXPOSE 55000-56000
+
+COPY ./wait_for_redis.py .
+EXPOSE 55000-55005
 EXPOSE 3031
-ENTRYPOINT sh /opt/funcx-forwarder/entrypoint.sh
+CMD bash /opt/funcx-forwarder/entrypoint.sh
 
