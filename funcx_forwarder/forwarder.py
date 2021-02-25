@@ -62,17 +62,16 @@ class Forwarder(Process):
                  stream_logs: bool = False,
                  logging_level=logging.INFO,
                  heartbeat_period=2,
-                 keys_dir=os.path.abspath('.curve'),
-                 poll_period: int = 10):
+                 keys_dir=os.path.abspath('.curve')):
         """
         Parameters
         ----------
-        ep_registration_queue: Queue
-             multiprocessing queue over which the service will send requests to register
-             new endpoints with the forwarder
+        command_queue: Queue
+             Queue used by the service to send commands such as 'REGISTER_ENDPOINT'
+             Forwarder expects dicts of the form {'command':<TERMINATE/REGISTER_ENDPOINT'> ...}
 
-        stream_logs: Bool
-             When enabled, forwarder will stream logs to STDOUT/ERR.
+        response_queue: Queue
+             Queue over which responses to commands are returned
 
         address : str
              Public address at which the forwarder will be accessible from the endpoints
@@ -80,11 +79,27 @@ class Forwarder(Process):
         redis_address : str
              full address to connect to redis. Required
 
-        redis_port : int
-             redis port. Defaults to 6379
+        endpoint_ports : (int, int, int)
+             A triplet of ports: (tasks_port, results_port, commands_port)
+             Default: (55001, 55002, 55003)
 
-        poll_period : int
-             poll_period in milliseconds
+        redis_port : int
+             redis port. Default: 6379
+
+        logdir: str
+             Directory to which logs will be written. Default: 'forwarder_logs'
+
+        stream_logs: Bool
+             When enabled, forwarder will stream logs to STDOUT/ERR.
+
+        logging_level: int
+             Logging level. Default: logging.INFO
+
+        heartbeat_period: int
+             heartbeat interval in seconds. Default 2s
+
+        keys_dir: str
+             Directory in which curve keys will be stored, Default: '.curve'
         """
         super().__init__()
         self.command_queue = command_queue
@@ -185,6 +200,25 @@ class Forwarder(Process):
         self.commands_q.add_client_key(endpoint_id, key)
         return True
 
+    def initialize_endpoint_queues(self):
+        ''' Initialize the three queues over which the forwarder communicates with endpoints
+        TaskQueue in mode='server' binds to all interfaces by default
+        '''
+        self.tasks_q = TaskQueue('127.0.0.1',
+                                 port=self.tasks_port,
+                                 RCVTIMEO=1,
+                                 keys_dir=self.keys_dir,
+                                 mode='server')
+        self.results_q = TaskQueue('127.0.0.1',
+                                   port=self.results_port,
+                                   keys_dir=self.keys_dir,
+                                   mode='server')
+        self.commands_q = TaskQueue('127.0.0.1',
+                                    port=self.commands_port,
+                                    keys_dir=self.keys_dir,
+                                    mode='server')
+        return
+
     def unregister_endpoint(self, endpoint_id):
         """ Unsubscribes from Redis pubsub and "removes" endpoint from the tasks channel
 
@@ -228,6 +262,99 @@ class Forwarder(Process):
                 self.unregister_endpoint(dest_endpoint)
         self._last_heartbeat = time.time()
 
+    def handle_endpoint_registration(self):
+        ''' Receive endpoint registration messages. Only registration messages
+        are sent from the interchange -> forwarder on the task_q
+        '''
+        try:
+            b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
+            # At this point ep_id is authenticated by means having the client keys.
+            ep_id = b_ep_id.decode('utf-8')
+            logger.info(f'Endpoint:{ep_id} connected')
+
+            if ep_id in self.connected_endpoints:
+                # This really shouldn't happen, could be a reconnect ?
+                logger.warning(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list")
+            self.connected_endpoints[ep_id] = {'registration_message': reg_message,
+                                               'missed_heartbeats': 0}
+
+            # Now subscribe to messages for ep_id
+            self.add_subscriber(ep_id)
+        except zmq.Again:
+            pass
+        except Exception:
+            logger.exception("Caught exception while waiting for registration")
+
+    def forward_task_to_endpoint(self):
+        ''' Migrates one task from redis to the appropriate endpoint
+
+        Returns:
+            int: Count of tasks migrated (0,1)
+        '''
+        # Now wait for any messages on REDIS that needs forwarding.
+        task = None
+        try:
+            dest_endpoint, task = self.redis_pubsub.get(timeout=0)
+            logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}")
+        except queue.Empty:
+            return 0
+        except Exception:
+            logger.exception("Caught exception waiting for message from REDIS")
+            return 0
+
+        if dest_endpoint not in self.endpoint_registry:
+            # At this point we should be unsubscribed and receiving only messages
+            # from the TCP buffers.
+            self.redis_pubsub.put(dest_endpoint, task)
+        else:
+            try:
+                logger.info(f"Sending task:{task.task_id} to endpoint:{dest_endpoint}")
+                zmq_task = Task(task.task_id,
+                                task.container,
+                                task.payload)
+                self.tasks_q.put(dest_endpoint.encode('utf-8'),
+                                 zmq_task.pack())
+            except (zmq.error.ZMQError, zmq.Again):
+                logger.exception(f"Endpoint:{dest_endpoint} is unreachable")
+                self.unregister_endpoint(dest_endpoint)
+            except Exception:
+                logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
+                pass
+        return 1
+
+    def handle_results(self):
+        ''' Receive incoming results on results_q and update Redis with results
+        '''
+        try:
+            # timeout in ms, when 0 it's nonblocking
+            b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
+
+            try:
+                message = pickle.loads(b_message)
+            except Exception:
+                logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
+
+            if 'registration' in message:
+                logger.debug(f"Registration message from {message['registration']}")
+                return
+
+            task = RedisTask.from_id(self.redis_pubsub.redis_client, message['task_id'])
+            logger.debug(f"Task info : {task}")
+
+            if 'result' in message:
+                task.status = TaskState.SUCCESS
+                task.result = message['result']
+                task.completion_time = time.time()
+            elif 'exception' in message:
+                task.status = TaskState.FAILED
+                task.exception = message['exception']
+                task.completion_time = time.time()
+
+        except zmq.Again:
+            pass
+        except Exception:
+            logger.exception("Caught exception from results queue")
+
     def run(self):
         """ Process entry point
         """
@@ -242,27 +369,11 @@ class Forwarder(Process):
             logger.exception("[MAIN] Failed to connect to Redis")
             raise
 
-        # TODO : THis timeout might become an issue
-        # TaskQueue in server mode binds to all interfaces
-        self.tasks_q = TaskQueue('127.0.0.1',
-                                 port=self.tasks_port,
-                                 RCVTIMEO=1,
-                                 keys_dir=self.keys_dir,
-                                 mode='server')
-        self.results_q = TaskQueue('127.0.0.1',
-                                   port=self.results_port,
-                                   keys_dir=self.keys_dir,
-                                   mode='server')
-        self.commands_q = TaskQueue('127.0.0.1',
-                                    port=self.commands_port,
-                                    keys_dir=self.keys_dir,
-                                    mode='server')
-
+        self.initialize_endpoint_queues()
         self._command_processor_thread = threading.Thread(target=self.command_processor,
                                                           args=(self.kill_event,),
                                                           name="forwarder-command-processor")
         self._command_processor_thread.start()
-
 
         while True:
 
@@ -275,100 +386,14 @@ class Forwarder(Process):
             # Send heartbeats to every connected manager
             self.heartbeat()
 
-            # Receive endpoint registration messages. Only registration messages
-            # are sent from the interchange -> forwarder on the task_q
-            try:
-                b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
-                # At this point ep_id is authenticated by means having the client keys.
-                ep_id = b_ep_id.decode('utf-8')
-                logger.info(f'Endpoint:{ep_id} connected')
-
-                if ep_id in self.connected_endpoints:
-                    # This really shouldn't happen, could be a reconnect ?
-                    logger.warning(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list")
-                self.connected_endpoints[ep_id] = {'registration_message': reg_message,
-                                                   'missed_heartbeats': 0}
-
-                # Now subscribe to messages for ep_id
-                self.add_subscriber(ep_id)
-            except zmq.Again:
-                pass
-            except Exception:
-                logger.exception("Caught exception while waiting for registration")
-
-            # Now wait for any messages on REDIS that needs forwarding.
-            task = None
-            try:
-                dest_endpoint, task = self.redis_pubsub.get(timeout=0)
-                logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}")
-            except queue.Empty:
-                # logger.debug("REDIS queues are empty")
-                pass
-            except Exception:
-                logger.exception("Caught exception waiting for message from REDIS")
-                pass
-
-            if task:
-                if dest_endpoint not in self.endpoint_registry:
-                    # At this point we should be unsubscribed and receiving only messages
-                    # from the TCP buffers.
-                    self.redis_pubsub.put(dest_endpoint, task)
-                else:
-                    try:
-                        logger.info(f"Sending task:{task.task_id} to endpoint:{dest_endpoint}")
-                        zmq_task = Task(task.task_id,
-                                        task.container,
-                                        task.payload)
-                        self.tasks_q.put(dest_endpoint.encode('utf-8'),
-                                         zmq_task.pack())
-                    except (zmq.error.ZMQError, zmq.Again):
-                        logger.exception(f"Endpoint:{dest_endpoint} is unreachable")
-                        self.unregister_endpoint(dest_endpoint)
-                    except Exception:
-                        logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
-                        pass
-
-            try:
-                # timeout in ms # Update to 0ms
-                b_ep_id, b_message = self.results_q.get(block=False, timeout=1)
-
-                try:
-                    message = pickle.loads(b_message)
-                except Exception:
-                    logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
-
-                if 'registration' in message:
-                    logger.debug(f"Registration message from {message['registration']}")
-                    continue
-
-                task = RedisTask.from_id(self.redis_pubsub.redis_client, message['task_id'])
-                logger.debug(f"Received message : {message}")
-                logger.debug(f"Task info : {task}")
-
-                # TODO: What does the res_dict look like?  Can we just set task.result=res_dict?
-                if 'result' in message:
-                    task.status = TaskState.SUCCESS
-                    task.result = message['result']
-                    task.completion_time = time.time()
-                    # TODO:Yadu remove the log line
-                    logger.debug(f"Result : {message['task_id']} {message['result']}")
-                elif 'exception' in message:
-                    task.status = TaskState.FAILED
-                    task.exception = message['exception']
-                    task.completion_time = time.time()
-                    # TODO:Yadu remove the log line
-                    logger.debug(f"Exception : {message['task_id']} {message['exception']}")
-
-            except zmq.Again:
-                # logger.debug("[MAIN] No result messages")
-                pass
-            except Exception:
-                logger.exception("Caught exception from results queue")
+            self.handle_endpoint_registration()
+            # [TODO] This step could be in a timed loop. Ideally after we have a perf study
+            self.forward_task_to_endpoint()
+            self.handle_results()
 
 
 if __name__ == '__main__':
 
     command, response = Queue(), Queue()
     fw = Forwarder(command, response, '127.0.0.1')
-    # fw.start()
     fw.run()
