@@ -34,6 +34,12 @@ class RedisPubSub(object):
         self._task_channel_prefix_len = len(self.task_channel_prefix)
         self.task_queue_prefix = 'task_queue_'
 
+    def channel_name(self, endpoint_id):
+        return f'{self.task_channel_prefix}{endpoint_id}'
+
+    def queue_name(self, endpoint_id):
+        return f'{self.task_queue_prefix}{endpoint_id}'
+
     def connect(self):
         try:
             self.redis_client = redis.StrictRedis(host=self.hostname, port=self.port, decode_responses=True)
@@ -52,10 +58,9 @@ class RedisPubSub(object):
             task.endpoint = endpoint_id
             task.status = TaskState.WAITING_FOR_EP
             # Note: Task object is already in Redis
-            # self.redis_client.hset(f'task_{task.task_id}', kind, json.dumps(payload))
-            subscribers = self.redis_client.publish(f'{self.task_channel_prefix}{endpoint_id}', task.task_id)
+            subscribers = self.redis_client.publish(self.channel_name(endpoint_id), task.task_id)
             if subscribers == 0:
-                self.redis_client.rpush(f'{self.task_queue_prefix}{endpoint_id}', task.task_id)
+                self.redis_client.rpush(self.queue_name(endpoint_id), task.task_id)
                 # logger.debug("No active subscribers. Pushing to queue")
             # logger.debug(f"Active subscribers : {subscribers}")
 
@@ -76,11 +81,11 @@ class RedisPubSub(object):
         """
         while True:
             try:
-                x = self.redis_client.blpop(f'{self.task_queue_prefix}{endpoint_id}', timeout=1)
+                x = self.redis_client.blpop(self.queue_name(endpoint_id), timeout=1)
                 if not x:
                     break
                 task_list, task_id = x
-                self.redis_client.publish(f'{self.task_channel_prefix}{endpoint_id}', task_id)
+                self.redis_client.publish(self.channel_name(endpoint_id), task_id)
             except AttributeError:
                 logger.exception("Failure while republishing from queue to pubsub")
                 raise NotConnected(self)
@@ -91,12 +96,12 @@ class RedisPubSub(object):
 
     def subscribe(self, endpoint_id):
         logger.info(f"Subscribing to tasks_{endpoint_id}")
-        self.pubsub.subscribe(f'{self.task_channel_prefix}{endpoint_id}')
+        self.pubsub.subscribe(self.channel_name(endpoint_id))
         self.republish_from_queue(endpoint_id)
         self.subscriber_count += 1
 
     def unsubscribe(self, endpoint_id):
-        self.pubsub.unsubscribe(f'{self.task_channel_prefix}{endpoint_id}')
+        self.pubsub.unsubscribe(self.channel_name(endpoint_id))
         self.subscriber_count -= 1
 
     def get(self, timeout: int = 2) -> Tuple[str, Task]:
