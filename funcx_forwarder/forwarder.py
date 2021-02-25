@@ -213,7 +213,7 @@ class Forwarder(Process):
         """
         if self._last_heartbeat + self.heartbeat_period > time.time():
             return
-        logger.debug("Heartbeat")
+        logger.info("Heartbeat")
         dest_endpoint_list = list(self.connected_endpoints.keys())
         for dest_endpoint in dest_endpoint_list:
             logger.debug(f"Sending heartbeat to {dest_endpoint}")
@@ -263,21 +263,15 @@ class Forwarder(Process):
                                                           name="forwarder-command-processor")
         self._command_processor_thread.start()
 
-        """  DEBUG : We will initially hack this with just one named endpoint `testing_ep1`
-        This should happen on trigger from a registration request from the service
-        We might not use this at all if we end up using the stone house pattern alone.
-        """
-        # self.add_endpoint_keys('testing_ep1', '/tmp/client.key')
 
         while True:
 
             if self.kill_event.is_set():
                 logger.critical("Kill event set. Starting termination sequence")
-                # 1. Unsubscribe from all
-                # 2. Flush all tasks received back to their queues for reprocessing.
+                # 1. [TODO] Unsubscribe from all
+                # 2. [TODO] Flush all tasks received back to their queues for reprocessing.
                 # 3. [TODO] Figure out how we can trigger a scaling event to replace lost forwarder?
 
-            # TODO : Add heartbeat messages
             # Send heartbeats to every connected manager
             self.heartbeat()
 
