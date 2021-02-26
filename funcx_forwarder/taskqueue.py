@@ -57,8 +57,6 @@ class TaskQueue(object):
         self.ironhouse = ironhouse
         self.keys_dir = keys_dir
 
-        assert self.mode in ['client', 'server'], "Only two modes are supported: client, server"
-
         if self.mode == 'server':
             print("Configuring server")
             self.zmq_socket = self.context.socket(zmq.ROUTER)
@@ -159,7 +157,7 @@ class TaskQueue(object):
     def register_client(self, message):
         return self.zmq_socket.send_multipart([message])
 
-    def put(self, dest, message, max_timeout=1000):
+    def put(self, dest, message):
         """ This function needs to be fast at the same time aware of the possibility of
         ZMQ pipes overflowing.
 
@@ -175,9 +173,6 @@ class TaskQueue(object):
 
         message : py object
              Python object to send
-
-        max_timeout : int
-             Max timeout in milliseconds that we will wait for before raising an exception
 
         Raises
         ------
