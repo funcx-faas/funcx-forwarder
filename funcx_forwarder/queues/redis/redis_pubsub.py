@@ -61,8 +61,6 @@ class RedisPubSub(object):
             subscribers = self.redis_client.publish(self.channel_name(endpoint_id), task.task_id)
             if subscribers == 0:
                 self.redis_client.rpush(self.queue_name(endpoint_id), task.task_id)
-                # logger.debug("No active subscribers. Pushing to queue")
-            # logger.debug(f"Active subscribers : {subscribers}")
 
         except AttributeError:
             raise Exception("Not connected")
