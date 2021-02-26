@@ -12,6 +12,8 @@ fi
 python3 wait_for_redis.py
 
 if [[ -z "${ADVERTISED_FORWARDER_ADDRESS}" ]]; then
+    # If the env var is not set, the assumption is that we are in AWS/EKS and the snippet below
+    # fetches the address from the AWS metadata service
     ADVERTISED_FORWARDER_ADDRESS=`wget http://169.254.169.254/latest/meta-data/public-ipv4; cat public-ipv4`
 fi
 
