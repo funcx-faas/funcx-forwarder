@@ -29,6 +29,7 @@ class RedisPubSub(object):
         self.port = port
         self.subscriber_count = 0
         self.redis_client = None
+        self.pubsub = None
         self.task_channel_prefix = 'task_channel_'
         self._task_channel_prefix_len = len(self.task_channel_prefix)
         self.task_queue_prefix = 'task_queue_'
