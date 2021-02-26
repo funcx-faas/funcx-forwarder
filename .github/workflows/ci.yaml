@@ -27,12 +27,10 @@ jobs:
         python -m pip install -r requirements.txt
         python -m pip install -r test-requirements.txt
         pip list
-    # Add this back once done with testing and Tornado dep is resolved.
-    # Ref issue: https://github.com/funcx-faas/funcx-forwarder/issues/6
-    #- name: Check for vulnerabilities in libraries
-    #  run: |
-    #    pip install safety
-    #    pip freeze | safety check
+    - name: Check for vulnerabilities in libraries
+      run: |
+        pip install safety
+        pip freeze | safety check
     - name: Lint with Flake8
       run: |
         flake8 --config funcx_forwarder.ini
