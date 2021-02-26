@@ -1,7 +1,6 @@
 import redis
 from redis.exceptions import ConnectionError
 import queue
-import time
 from typing import Tuple
 from funcx_forwarder.errors import FuncxError
 from funcx_forwarder.queues.redis.tasks import Task, TaskState
