@@ -1,10 +1,11 @@
 flask==1.1.2
 requests>=2.24.0
 jsonschema==3.2.0
-sphinx_rtd_theme
-nbsphinx==0.7.1
-parsl==0.9.0
+parsl>=1.1.0a0
 configobj==5.0.6
 texttable==1.6.2
 redis==3.5.3
-funcx==0.0.2a0
+funcx @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx&subdirectory=funcx_sdk
+funcx-endpoint @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx-endpoint&subdirectory=funcx_endpoint
+pyzmq>=19.0.0,<20.0.0
+
