@@ -17,5 +17,5 @@ if [[ -z "${ADVERTISED_FORWARDER_ADDRESS}" ]]; then
     ADVERTISED_FORWARDER_ADDRESS=`wget http://169.254.169.254/latest/meta-data/public-ipv4; cat public-ipv4`
 fi
 
-forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT -d --stream_logs
+forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmqhost $FUNCX_RABBITMQ_SERVICE_HOST -d --stream_logs
 

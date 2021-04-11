@@ -16,6 +16,7 @@ from funcx_forwarder.queues.redis.tasks import Task as RedisTask
 from funcx_forwarder.queues.redis.tasks import TaskState
 import time
 import pickle
+import pika
 
 logger = None
 
@@ -56,6 +57,7 @@ class Forwarder(Process):
                  response_queue,
                  address: str,
                  redis_address: str,
+                 rabbitmq_conn_params: str,
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
                  logdir: str = "forwarder_logs",
@@ -106,6 +108,7 @@ class Forwarder(Process):
         self.response_queue = response_queue
         self.address = address
         self.redis_url = f"{redis_address}:{redis_port}"
+        self.rabbitmq_conn_params = rabbitmq_conn_params
         self.logdir = logdir
         self.tasks_port, self.results_port, self.commands_port = endpoint_ports
         self.connected_endpoints = {}
@@ -353,6 +356,15 @@ class Forwarder(Process):
                 task.status = TaskState.FAILED
                 task.exception = message['exception']
                 task.completion_time = time.time()
+
+            topic_id = task.topic_id
+            if 'result' in message or 'exception' in message and topic_id:
+                connection = pika.BlockingConnection(self.rabbitmq_conn_params)
+                channel = connection.channel()
+                channel.queue_declare(queue=topic_id)
+
+                channel.basic_publish(exchange='', routing_key=topic_id, body=task.task_id)
+                connection.close()
 
         except zmq.Again:
             pass

@@ -6,6 +6,7 @@ creates an appropriate forwarder to which the endpoint can connect up.
 import argparse
 import json
 import logging
+import pika
 import redis
 import time
 
@@ -160,6 +161,8 @@ def cli():
                         help="Redis host address")
     parser.add_argument("--redisport", default=6379,
                         help="Redis port")
+    parser.add_argument("--rabbitmqhost", required=True,
+                        help="RabbitMQ host address")
     parser.add_argument("--logdir", default=None,
                         help="Dir to which forwarder logs would be written")
     parser.add_argument("--stream_logs", action='store_true',
@@ -184,6 +187,10 @@ def cli():
         decode_responses=True
     )
 
+    rabbitmq_credentials = pika.PlainCredentials('funcx', 'rabbitmq')
+    rabbitmq_conn_params = pika.ConnectionParameters(args.rabbitmqhost, 5672, '/', rabbitmq_credentials)
+    app.config['rabbitmq_conn_params'] = rabbitmq_conn_params
+
     app.config['forwarder_command'] = Queue()
     app.config['forwarder_response'] = Queue()
 
@@ -191,6 +198,7 @@ def cli():
                    app.config['forwarder_response'],
                    args.address,
                    args.redishost,
+                   rabbitmq_conn_params,
                    # endpoint_ports=(55008, 55009, 55010),   # Only for debug
                    stream_logs=args.stream_logs,
                    logdir=args.logdir,
