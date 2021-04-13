@@ -328,6 +328,7 @@ class Forwarder(Process):
         try:
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
+            logger.debug(f"[YADU-DEBUG] Got message: {b_message} from EP:{b_ep_id}")
 
             try:
                 message = pickle.loads(b_message)
