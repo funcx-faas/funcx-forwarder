@@ -329,6 +329,10 @@ class Forwarder(Process):
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
 
+            if b_message == b'HEARTBEAT':
+                logger.debug(f"Received HEARTBEAT from {b_ep_id} over results channel")
+                return
+
             try:
                 message = pickle.loads(b_message)
             except Exception:
