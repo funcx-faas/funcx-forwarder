@@ -61,7 +61,7 @@ class Forwarder(Process):
                  logdir: str = "forwarder_logs",
                  stream_logs: bool = False,
                  logging_level=logging.INFO,
-                 heartbeat_period=2,
+                 heartbeat_period=30,
                  keys_dir=os.path.abspath('.curve')):
         """
         Parameters
