@@ -361,9 +361,10 @@ class Forwarder(Process):
             if 'result' in message or 'exception' in message and topic_id:
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
+                channel.exchange_declare(exchange='tasks', exchange_type='direct')
                 channel.queue_declare(queue=topic_id)
 
-                channel.basic_publish(exchange='', routing_key=topic_id, body=task.task_id)
+                channel.basic_publish(exchange='tasks', routing_key=topic_id, body=task.task_id)
                 connection.close()
 
         except zmq.Again:
