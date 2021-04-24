@@ -363,8 +363,10 @@ class Forwarder(Process):
                 channel = connection.channel()
                 channel.exchange_declare(exchange='tasks', exchange_type='direct')
                 channel.queue_declare(queue=batch_id)
+                channel.queue_bind(batch_id, 'tasks')
 
                 channel.basic_publish(exchange='tasks', routing_key=batch_id, body=task.task_id)
+                logger.debug(f"Publishing to RabbitMQ routing key {batch_id} : {task.task_id}")
                 connection.close()
 
         except zmq.Again:
