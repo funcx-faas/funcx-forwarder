@@ -329,6 +329,8 @@ class Forwarder(Process):
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
 
+            logger.info(f"Received {b_message} from {b_ep_id} over results channel")
+
             if b_message == b'HEARTBEAT':
                 logger.debug(f"Received HEARTBEAT from {b_ep_id} over results channel")
                 return
@@ -337,6 +339,8 @@ class Forwarder(Process):
                 message = pickle.loads(b_message)
             except Exception:
                 logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
+
+            logger.info(f"Unpickled {message} from {b_ep_id} over results channel")
 
             if 'registration' in message:
                 logger.debug(f"Registration message from {message['registration']}")
