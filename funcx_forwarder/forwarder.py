@@ -2,7 +2,7 @@ import logging
 import os
 import zmq
 import queue
-import request
+import requests
 import threading
 import funcx_forwarder
 from funcx_forwarder import set_file_logger, set_stream_logger
