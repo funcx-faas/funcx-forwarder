@@ -282,7 +282,7 @@ class Forwarder(Process):
             b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
-            logger.info(f'Endpoint:{ep_id} connected with registration {reg_message}')
+            logger.info(f'Endpoint:{ep_id} connected with registration {pickle.loads(reg_message)}')
 
             if ep_id in self.connected_endpoints:
                 # This really shouldn't happen, could be a reconnect ?
@@ -355,12 +355,12 @@ class Forwarder(Process):
             logger.info(f"Unpickled {message} from {b_ep_id} over results channel")
 
             if isinstance(message, EPStatusReport):
-                logger.debug(f"Endpoint status message from {message.endpoint_id}")
+                logger.debug(f"Endpoint status message {message.__dict__} from {b_ep_id.decode('utf-8')}")
                 logger.debug(f"Endpoint status: {message.ep_status}")
                 logger.debug(f"Endpoint task status: {message.task_statuses}")
                 # Update endpoint status
                 try:
-                    self.endpoint_db.put(self.endpoint_id, message.ep_status)
+                    self.endpoint_db.put(b_ep_id.decode('utf-8'), message.ep_status)
                 except Exception:
                     logger.error("Caught error while trying to push endpoint status data into redis")
 
