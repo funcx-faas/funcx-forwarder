@@ -174,6 +174,7 @@ class Forwarder(Process):
             elif command['command'] == 'ADD_ENDPOINT_TO_REGISTRY':
                 logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
                 result = self.add_endpoint_to_registry(command['endpoint_id'],
+                                                       command['endpoint_address'],
                                                        command['client_public_key'])
 
                 response = {'response': result,
@@ -192,7 +193,7 @@ class Forwarder(Process):
 
             self.response_queue.put(response)
 
-    def add_endpoint_to_registry(self, endpoint_id, key):
+    def add_endpoint_to_registry(self, endpoint_id, endpoint_address, key):
         """ Add new client keys to the zmq authenticator
 
         Registering an existing endpoint_id is allowed
@@ -200,17 +201,23 @@ class Forwarder(Process):
         logger.info(f"Endpoint_id:{endpoint_id} added to registry")
         self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
                                                'client_public_key': key}
+        self.update_endpoint_metadata(endpoint_address)
+
         self.tasks_q.add_client_key(endpoint_id, key)
         self.results_q.add_client_key(endpoint_id, key)
         self.commands_q.add_client_key(endpoint_id, key)
         return True
 
-    def update_endpoint_metadata(self):
+    def update_endpoint_metadata(self, endpoint_address):
         """ Geo locate the endpoint and push as metadata into redis
         """
-        resp = requests.get('http://ipinfo.io/{}/json'.format(self.endpoint_addr))
-        self.endpoint_db.set_endpoint_metadata(self.endpoint_id, resp.json())
-        return resp.json()
+        try:
+            resp = requests.get('http://ipinfo.io/{}/json'.format(endpoint_address))
+            self.endpoint_db.set_endpoint_metadata(endpoint_id, resp.json())
+        except Exception:
+            logger.error(f"Failed to geo locate {endpoint_address}")
+        else:
+            logger.info(f"Endpoint with {endpoint_address} is at {resp}")
 
     def initialize_endpoint_queues(self):
         ''' Initialize the three queues over which the forwarder communicates with endpoints
