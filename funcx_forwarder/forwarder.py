@@ -201,14 +201,14 @@ class Forwarder(Process):
         logger.info(f"Endpoint_id:{endpoint_id} added to registry")
         self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
                                                'client_public_key': key}
-        self.update_endpoint_metadata(endpoint_address)
+        self.update_endpoint_metadata(endpoint_id, endpoint_address)
 
         self.tasks_q.add_client_key(endpoint_id, key)
         self.results_q.add_client_key(endpoint_id, key)
         self.commands_q.add_client_key(endpoint_id, key)
         return True
 
-    def update_endpoint_metadata(self, endpoint_address):
+    def update_endpoint_metadata(self, endpoint_id, endpoint_address):
         """ Geo locate the endpoint and push as metadata into redis
         """
         try:
