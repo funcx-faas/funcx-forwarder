@@ -348,8 +348,6 @@ class Forwarder(Process):
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
 
-            logger.info(f"Received {b_message} from {b_ep_id} over results channel")
-
             if b_message == b'HEARTBEAT':
                 logger.debug(f"Received HEARTBEAT from {b_ep_id} over results channel")
                 return
@@ -359,12 +357,8 @@ class Forwarder(Process):
             except Exception:
                 logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
 
-            logger.info(f"Unpickled {message} from {b_ep_id} over results channel")
-
             if isinstance(message, EPStatusReport):
                 logger.debug(f"Endpoint status message {message.__dict__} from {b_ep_id.decode('utf-8')}")
-                logger.debug(f"Endpoint status: {message.ep_status}")
-                logger.debug(f"Endpoint task status: {message.task_statuses}")
                 # Update endpoint status
                 try:
                     self.endpoint_db.put(b_ep_id.decode('utf-8'), message.ep_status)
@@ -372,7 +366,6 @@ class Forwarder(Process):
                     logger.error("Caught error while trying to push endpoint status data into redis")
 
                 # Update task status from endpoint
-                logger.debug("Received task status update")
                 task_status_delta = message.task_statuses
                 for task_id, status_code in task_status_delta.items():
                     # task id will look like task_id;foo;bar
