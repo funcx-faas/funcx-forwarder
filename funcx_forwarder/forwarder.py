@@ -370,7 +370,7 @@ class Forwarder(Process):
                 for task_id, status_code in task_status_delta.items():
                     status = status_code_convert(status_code)
 
-                    logger.info(f"Updating Task({task_id}) to status={status}")
+                    logger.debug(f"Updating Task({task_id}) to status={status}")
                     task = RedisTask.from_id(self.redis_pubsub.redis_client, task_id)
                     task.status = status
                 return
