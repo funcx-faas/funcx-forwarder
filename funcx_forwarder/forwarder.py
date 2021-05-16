@@ -368,10 +368,6 @@ class Forwarder(Process):
                 # Update task status from endpoint
                 task_status_delta = message.task_statuses
                 for task_id, status_code in task_status_delta.items():
-                    # task id will look like task_id;foo;bar
-                    # TODO: when task id no longer contains container and serializer, stop splitting
-                    logger.debug(f"Received status {status_code} update for task {task_id}")
-                    task_id = task_id.split(";")[0]
                     status = status_code_convert(status_code)
 
                     logger.info(f"Updating Task({task_id}) to status={status}")
