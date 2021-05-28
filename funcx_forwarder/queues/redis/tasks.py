@@ -81,11 +81,12 @@ class Task:
     result = RedisField()
     exception = RedisField()
     completion_time = RedisField()
+    task_group_id = RedisField()
 
     # must keep ttl and _set_expire in merge
     TASK_TTL = timedelta(weeks=1)
 
-    def __init__(self, rc: StrictRedis, task_id: str, container: str = "", serializer: str = "", payload: str = ""):
+    def __init__(self, rc: StrictRedis, task_id: str, container: str = "", serializer: str = "", payload: str = "", task_group_id: str = ""):
         """ If the kwargs are passed, then they will be overwritten.  Otherwise, they will gotten from existing
         task entry.
         Parameters
@@ -99,6 +100,8 @@ class Task:
         serializer : str
         payload : str
             serialized function + input data
+        task_group_id : str
+            UUID of task group that this task belongs to
         """
         self.rc = rc
         self.task_id = task_id
@@ -119,8 +122,10 @@ class Task:
         if payload:
             self.payload = payload
 
-        self.header = self._generate_header()
+        if task_group_id:
+            self.task_group_id = task_group_id
 
+        self.header = self._generate_header()
         self._set_expire()
 
     @staticmethod

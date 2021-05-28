@@ -8,4 +8,5 @@ redis==3.5.3
 funcx @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx&subdirectory=funcx_sdk
 funcx-endpoint @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx-endpoint&subdirectory=funcx_endpoint
 pyzmq==22.0.3
+pika==1.2.0
 
