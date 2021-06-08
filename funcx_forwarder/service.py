@@ -137,6 +137,7 @@ def register():
     print("Registering endpoint : ", reg_info['endpoint_id'])
     app.config['forwarder_command'].put({'command': 'ADD_ENDPOINT_TO_REGISTRY',
                                          'endpoint_id': reg_info['endpoint_id'],
+                                         'endpoint_address': reg_info['endpoint_addr'],
                                          'client_public_key': reg_info.get('client_public_key', None),
                                          'id': 0})
     ret_package = app.config['forwarder_response'].get()

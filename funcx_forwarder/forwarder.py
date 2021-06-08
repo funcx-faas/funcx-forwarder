@@ -2,6 +2,7 @@ import logging
 import os
 import zmq
 import queue
+import requests
 import threading
 import funcx_forwarder
 from funcx_forwarder import set_file_logger, set_stream_logger
@@ -10,10 +11,12 @@ from funcx_forwarder import set_file_logger, set_stream_logger
 from multiprocessing import Process, Queue, Event
 from funcx_forwarder.taskqueue import TaskQueue
 from funcx_forwarder.queues.redis.redis_pubsub import RedisPubSub
-from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat
+from funcx_forwarder.endpoint_db import EndpointDB
+
+from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport
 
 from funcx_forwarder.queues.redis.tasks import Task as RedisTask
-from funcx_forwarder.queues.redis.tasks import TaskState
+from funcx_forwarder.queues.redis.tasks import TaskState, status_code_convert
 import time
 import pickle
 import pika
@@ -118,6 +121,8 @@ class Forwarder(Process):
         self.endpoint_registry = {}
         self.keys_dir = keys_dir
         self.redis_pubsub = RedisPubSub(hostname=redis_address, port=redis_port)
+        self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
+        self.endpoint_db.connect()
 
         global logger
         if self.logdir:
@@ -172,6 +177,7 @@ class Forwarder(Process):
             elif command['command'] == 'ADD_ENDPOINT_TO_REGISTRY':
                 logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
                 result = self.add_endpoint_to_registry(command['endpoint_id'],
+                                                       command['endpoint_address'],
                                                        command['client_public_key'])
 
                 response = {'response': result,
@@ -190,7 +196,7 @@ class Forwarder(Process):
 
             self.response_queue.put(response)
 
-    def add_endpoint_to_registry(self, endpoint_id, key):
+    def add_endpoint_to_registry(self, endpoint_id, endpoint_address, key):
         """ Add new client keys to the zmq authenticator
 
         Registering an existing endpoint_id is allowed
@@ -198,10 +204,23 @@ class Forwarder(Process):
         logger.info(f"Endpoint_id:{endpoint_id} added to registry")
         self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
                                                'client_public_key': key}
+        self.update_endpoint_metadata(endpoint_id, endpoint_address)
+
         self.tasks_q.add_client_key(endpoint_id, key)
         self.results_q.add_client_key(endpoint_id, key)
         self.commands_q.add_client_key(endpoint_id, key)
         return True
+
+    def update_endpoint_metadata(self, endpoint_id, endpoint_address):
+        """ Geo locate the endpoint and push as metadata into redis
+        """
+        try:
+            resp = requests.get('http://ipinfo.io/{}/json'.format(endpoint_address))
+            self.endpoint_db.set_endpoint_metadata(endpoint_id, resp.json())
+        except Exception:
+            logger.error(f"Failed to geo locate {endpoint_address}")
+        else:
+            logger.info(f"Endpoint with {endpoint_address} is at {resp}")
 
     def initialize_endpoint_queues(self):
         ''' Initialize the three queues over which the forwarder communicates with endpoints
@@ -273,7 +292,7 @@ class Forwarder(Process):
             b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
-            logger.info(f'Endpoint:{ep_id} connected')
+            logger.info(f'Endpoint:{ep_id} connected with registration {pickle.loads(reg_message)}')
 
             if ep_id in self.connected_endpoints:
                 # This really shouldn't happen, could be a reconnect ?
@@ -340,6 +359,24 @@ class Forwarder(Process):
                 message = pickle.loads(b_message)
             except Exception:
                 logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
+
+            if isinstance(message, EPStatusReport):
+                logger.debug(f"Endpoint status message {message.__dict__} from {b_ep_id.decode('utf-8')}")
+                # Update endpoint status
+                try:
+                    self.endpoint_db.put(b_ep_id.decode('utf-8'), message.ep_status)
+                except Exception:
+                    logger.error("Caught error while trying to push endpoint status data into redis")
+
+                # Update task status from endpoint
+                task_status_delta = message.task_statuses
+                for task_id, status_code in task_status_delta.items():
+                    status = status_code_convert(status_code)
+
+                    logger.debug(f"Updating Task({task_id}) to status={status}")
+                    task = RedisTask.from_id(self.redis_pubsub.redis_client, task_id)
+                    task.status = status
+                return
 
             if 'registration' in message:
                 logger.debug(f"Registration message from {message['registration']}")

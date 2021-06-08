@@ -6,7 +6,7 @@ import time
 # from forwarder.queues.base import FuncxQueue, NotConnected
 import json
 
-from funcx.queues.base import NotConnected
+from funcx_endpoint.queues.base import NotConnected
 
 
 class EndpointDB(object):
