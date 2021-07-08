@@ -307,6 +307,18 @@ class Forwarder(Process):
         except Exception:
             logger.exception("Caught exception while waiting for registration")
 
+    def log_task_transition(self, task, transition_name):
+        extra_logging = {
+            "user_id": task.user_id,
+            "task_id": task.task_id,
+            "task_group_id": task.task_group_id,
+            "function_id": task.function_id,
+            "endpoint_id": task.endpoint,
+            "container_id": task.container,
+            "task_transition": True
+        }
+        logger.info(transition_name, extra=extra_logging)
+
     def forward_task_to_endpoint(self):
         ''' Migrates one task from redis to the appropriate endpoint
 
@@ -342,6 +354,8 @@ class Forwarder(Process):
             except Exception:
                 logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
                 pass
+            else:
+                self.log_task_transition(task, 'forwarded')
         return 1
 
     def handle_results(self):
@@ -396,6 +410,7 @@ class Forwarder(Process):
 
             task_group_id = task.task_group_id
             if 'result' in message or 'exception' in message and task_group_id:
+
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
                 channel.exchange_declare(exchange='tasks', exchange_type='direct')
@@ -405,6 +420,8 @@ class Forwarder(Process):
                 channel.basic_publish(exchange='tasks', routing_key=task_group_id, body=task.task_id)
                 logger.debug(f"Publishing to RabbitMQ routing key {task_group_id} : {task.task_id}")
                 connection.close()
+
+                self.log_task_transition(task, 'result-enqueued')
 
         except zmq.Again:
             pass
