@@ -355,7 +355,7 @@ class Forwarder(Process):
                 logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
                 pass
             else:
-                self.log_task_transition(task, 'forwarded')
+                self.log_task_transition(task, 'dispatched_to_endpoint')
         return 1
 
     def handle_results(self):
@@ -421,7 +421,7 @@ class Forwarder(Process):
                 logger.debug(f"Publishing to RabbitMQ routing key {task_group_id} : {task.task_id}")
                 connection.close()
 
-                self.log_task_transition(task, 'result-enqueued')
+                self.log_task_transition(task, 'result_enqueued')
 
         except zmq.Again:
             pass
