@@ -5,7 +5,7 @@ import queue
 import requests
 import threading
 import funcx_forwarder
-from funcx_forwarder import set_file_logger, set_stream_logger
+from funcx_forwarder import set_stream_logger
 
 
 from multiprocessing import Process, Queue, Event
@@ -63,7 +63,6 @@ class Forwarder(Process):
                  rabbitmq_conn_params: str,
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
-                 logdir: str = "forwarder_logs",
                  stream_logs: bool = False,
                  logging_level=logging.INFO,
                  heartbeat_period=30,
@@ -91,9 +90,6 @@ class Forwarder(Process):
         redis_port : int
              redis port. Default: 6379
 
-        logdir: str
-             Directory to which logs will be written. Default: 'forwarder_logs'
-
         stream_logs: Bool
              When enabled, forwarder will stream logs to STDOUT/ERR.
 
@@ -112,7 +108,6 @@ class Forwarder(Process):
         self.address = address
         self.redis_url = f"{redis_address}:{redis_port}"
         self.rabbitmq_conn_params = rabbitmq_conn_params
-        self.logdir = logdir
         self.tasks_port, self.results_port, self.commands_port = endpoint_ports
         self.connected_endpoints = {}
         self.kill_event = Event()
@@ -125,10 +120,6 @@ class Forwarder(Process):
         self.endpoint_db.connect()
 
         global logger
-        if self.logdir:
-            os.makedirs(self.logdir, exist_ok=True)
-            logger = set_file_logger(f'{self.logdir}/forwarder.log', level=logging_level)
-
         if stream_logs:
             logger = set_stream_logger(level=logging_level)
 
