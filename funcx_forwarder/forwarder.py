@@ -5,7 +5,7 @@ import queue
 import requests
 import threading
 import funcx_forwarder
-from funcx_forwarder import set_file_logger, set_stream_logger
+from funcx_forwarder import set_stream_logger
 
 
 from multiprocessing import Process, Queue, Event
@@ -63,7 +63,6 @@ class Forwarder(Process):
                  rabbitmq_conn_params: str,
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
-                 logdir: str = "forwarder_logs",
                  stream_logs: bool = False,
                  logging_level=logging.INFO,
                  heartbeat_period=30,
@@ -91,9 +90,6 @@ class Forwarder(Process):
         redis_port : int
              redis port. Default: 6379
 
-        logdir: str
-             Directory to which logs will be written. Default: 'forwarder_logs'
-
         stream_logs: Bool
              When enabled, forwarder will stream logs to STDOUT/ERR.
 
@@ -112,7 +108,6 @@ class Forwarder(Process):
         self.address = address
         self.redis_url = f"{redis_address}:{redis_port}"
         self.rabbitmq_conn_params = rabbitmq_conn_params
-        self.logdir = logdir
         self.tasks_port, self.results_port, self.commands_port = endpoint_ports
         self.connected_endpoints = {}
         self.kill_event = Event()
@@ -125,10 +120,6 @@ class Forwarder(Process):
         self.endpoint_db.connect()
 
         global logger
-        if self.logdir:
-            os.makedirs(self.logdir, exist_ok=True)
-            logger = set_file_logger(f'{self.logdir}/forwarder.log', level=logging_level)
-
         if stream_logs:
             logger = set_stream_logger(level=logging_level)
 
@@ -307,6 +298,18 @@ class Forwarder(Process):
         except Exception:
             logger.exception("Caught exception while waiting for registration")
 
+    def log_task_transition(self, task, transition_name):
+        extra_logging = {
+            "user_id": task.user_id,
+            "task_id": task.task_id,
+            "task_group_id": task.task_group_id,
+            "function_id": task.function_id,
+            "endpoint_id": task.endpoint,
+            "container_id": task.container,
+            "task_transition": True
+        }
+        logger.info(transition_name, extra=extra_logging)
+
     def forward_task_to_endpoint(self):
         ''' Migrates one task from redis to the appropriate endpoint
 
@@ -342,6 +345,8 @@ class Forwarder(Process):
             except Exception:
                 logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
                 pass
+            else:
+                self.log_task_transition(task, 'dispatched_to_endpoint')
         return 1
 
     def handle_results(self):
@@ -396,6 +401,7 @@ class Forwarder(Process):
 
             task_group_id = task.task_group_id
             if 'result' in message or 'exception' in message and task_group_id:
+
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
                 channel.exchange_declare(exchange='tasks', exchange_type='direct')
@@ -405,6 +411,8 @@ class Forwarder(Process):
                 channel.basic_publish(exchange='tasks', routing_key=task_group_id, body=task.task_id)
                 logger.debug(f"Publishing to RabbitMQ routing key {task_group_id} : {task.task_id}")
                 connection.close()
+
+                self.log_task_transition(task, 'result_enqueued')
 
         except zmq.Again:
             pass

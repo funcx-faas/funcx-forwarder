@@ -164,8 +164,6 @@ def cli():
                         help="Redis port")
     parser.add_argument("--rabbitmqhost", required=True,
                         help="RabbitMQ host address")
-    parser.add_argument("--logdir", default=None,
-                        help="Dir to which forwarder logs would be written")
     parser.add_argument("--stream_logs", action='store_true',
                         help="Enable streaming logging to STDOUT/ERR")
     parser.add_argument("-d", "--debug", action='store_true',
@@ -202,7 +200,6 @@ def cli():
                    rabbitmq_conn_params,
                    # endpoint_ports=(55008, 55009, 55010),   # Only for debug
                    stream_logs=args.stream_logs,
-                   logdir=args.logdir,
                    logging_level=logging.DEBUG if args.debug else logging.INFO,
                    redis_port=args.redisport)
     fw.start()
