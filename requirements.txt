@@ -1,12 +1,12 @@
 flask==1.1.2
-requests>=2.24.0
+requests==2.25.1
 jsonschema==3.2.0
-parsl>=1.1.0a0
+parsl==1.1.0
 configobj==5.0.6
 texttable==1.6.2
 redis==3.5.3
-funcx @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx&subdirectory=funcx_sdk
-funcx-endpoint @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx-endpoint&subdirectory=funcx_endpoint
+funcx==0.3.0
+funcx-endpoint==0.3.0
 pyzmq==22.0.3
 pika==1.2.0
 python-json-logger==2.0.1
