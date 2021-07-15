@@ -9,16 +9,19 @@ import logging
 import pika
 import redis
 import time
+import sys
 
 from flask import Flask, jsonify
 from flask import request
 
 from funcx_forwarder.version import VERSION, MIN_EP_VERSION
 # from funcx_forwarder.forwarderobject import spawn_forwarder
+from funcx_forwarder import set_stream_logger
 from funcx_forwarder.forwarder import Forwarder
 from multiprocessing import Queue
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 
 
 @app.route('/ping')
@@ -151,6 +154,14 @@ def list_mappings():
 
 
 def cli():
+    try:
+        cli_run()
+    except Exception:
+        logger.exception('Caught exception while starting forwarder')
+        sys.exit(-1)
+
+
+def cli_run():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", default=8080,
                         help="Port at which the service will listen on")
@@ -164,14 +175,17 @@ def cli():
                         help="Redis port")
     parser.add_argument("--rabbitmqhost", required=True,
                         help="RabbitMQ host address")
-    parser.add_argument("--stream_logs", action='store_true',
-                        help="Enable streaming logging to STDOUT/ERR")
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
     parser.add_argument("-v", "--version", action='store_true',
                         help="Print version information")
 
     args = parser.parse_args()
+
+    logging_level = logging.DEBUG if args.debug else logging.INFO
+    global logger
+    logger = set_stream_logger(level=logging_level)
+    logger.info('Hello WORLD')
 
     if args.version is True:
         print(f"Forwarder version: {VERSION}")
@@ -199,8 +213,6 @@ def cli():
                    args.redishost,
                    rabbitmq_conn_params,
                    # endpoint_ports=(55008, 55009, 55010),   # Only for debug
-                   stream_logs=args.stream_logs,
-                   logging_level=logging.DEBUG if args.debug else logging.INFO,
                    redis_port=args.redisport)
     fw.start()
     app.config['forwarder_process'] = fw
