@@ -400,7 +400,7 @@ class Forwarder(Process):
                 task.completion_time = time.time()
 
             task_group_id = task.task_group_id
-            if 'result' in message or 'exception' in message and task_group_id:
+            if ('result' in message or 'exception' in message) and task_group_id:
 
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
