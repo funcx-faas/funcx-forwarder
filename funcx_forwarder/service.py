@@ -185,7 +185,6 @@ def cli_run():
     logging_level = logging.DEBUG if args.debug else logging.INFO
     global logger
     logger = set_stream_logger(level=logging_level)
-    logger.info('Hello WORLD')
 
     if args.version is True:
         print(f"Forwarder version: {VERSION}")
@@ -213,6 +212,7 @@ def cli_run():
                    args.redishost,
                    rabbitmq_conn_params,
                    # endpoint_ports=(55008, 55009, 55010),   # Only for debug
+                   logging_level=logging_level,
                    redis_port=args.redisport)
     fw.start()
     app.config['forwarder_process'] = fw
