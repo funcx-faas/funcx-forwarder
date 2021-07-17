@@ -58,7 +58,7 @@ class TaskQueue(object):
         self.keys_dir = keys_dir
 
         if self.mode == 'server':
-            print("Configuring server")
+            logger.debug("Configuring server")
             self.zmq_socket = self.context.socket(zmq.ROUTER)
             self.zmq_socket.set(zmq.ROUTER_MANDATORY, 1)
             self.setup_server_auth()
@@ -116,7 +116,7 @@ class TaskQueue(object):
         self.zmq_socket.curve_secretkey = server_secret
         self.zmq_socket.curve_publickey = server_public
         self.zmq_socket.curve_server = True  # must come before bind
-        print("Auth done")
+        logger.debug("Auth done")
 
     def setup_client_auth(self):
         # We need two certificates, one for the client and one for
@@ -131,7 +131,7 @@ class TaskQueue(object):
         server_public_file = os.path.join(self.keys_dir, "server.key")
         server_public, _ = zmq.auth.load_certificate(server_public_file)
         self.zmq_socket.curve_serverkey = server_public
-        print("Auth done")
+        logger.debug("Auth done")
 
     def get(self, block=True, timeout=1000):
         """
