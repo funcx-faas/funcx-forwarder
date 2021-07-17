@@ -161,8 +161,8 @@ class Forwarder(Process):
                 elif command['command'] == 'ADD_ENDPOINT_TO_REGISTRY':
                     logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
                     result = self.add_endpoint_to_registry(command['endpoint_id'],
-                                                        command['endpoint_address'],
-                                                        command['client_public_key'])
+                                                           command['endpoint_address'],
+                                                           command['client_public_key'])
 
                     response = {'response': result,
                                 'id': command.get('id'),
@@ -432,8 +432,8 @@ class Forwarder(Process):
 
             self.initialize_endpoint_queues()
             self._command_processor_thread = threading.Thread(target=self.command_processor,
-                                                            args=(self.kill_event,),
-                                                            name="forwarder-command-processor")
+                                                              args=(self.kill_event,),
+                                                              name="forwarder-command-processor")
             self._command_processor_thread.start()
 
             while True:

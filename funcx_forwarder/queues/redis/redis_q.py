@@ -50,7 +50,7 @@ class RedisQueue(object):
                 self.redis_client = redis.StrictRedis(host=self.hostname, port=self.port, decode_responses=True)
         except redis.exceptions.ConnectionError:
             logger.error("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
-                                                                                  self.port))
+                                                                                         self.port))
 
             raise
 
@@ -105,7 +105,7 @@ class RedisQueue(object):
             raise NotConnected(self)
         except redis.exceptions.ConnectionError:
             logger.error("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
-                                                                                  self.port))
+                                                                                         self.port))
             raise
 
     @property
