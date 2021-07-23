@@ -9,7 +9,7 @@ __author__ = "The funcX team"
 __version__ = VERSION
 
 
-def set_stream_logger(name='forwarder', level=logging.DEBUG, format_string=None):
+def set_stream_logger(name='funcx_forwarder', level=logging.DEBUG, format_string=None):
     """Add a stream log handler.
 
     Args:
@@ -18,7 +18,7 @@ def set_stream_logger(name='forwarder', level=logging.DEBUG, format_string=None)
          - format_string (string) : Set to None by default.
 
     Returns:
-         - None
+         - Logger
     """
     if format_string is None:
         format_string = "%(asctime)s %(name)s %(levelname)s %(message)s"
@@ -33,4 +33,4 @@ def set_stream_logger(name='forwarder', level=logging.DEBUG, format_string=None)
     return logger
 
 
-logging.getLogger('forwarder').addHandler(logging.NullHandler())
+logging.getLogger('funcx_forwarder').addHandler(logging.NullHandler())

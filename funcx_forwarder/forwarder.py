@@ -1,11 +1,11 @@
 import logging
 import os
+import sys
 import zmq
 import queue
 import requests
 import threading
 import funcx_forwarder
-from funcx_forwarder import set_stream_logger
 
 
 from multiprocessing import Process, Queue, Event
@@ -21,7 +21,7 @@ import time
 import pickle
 import pika
 
-logger = None
+logger = logging.getLogger(__name__)
 
 
 loglevels = {50: 'CRITICAL',
@@ -63,7 +63,6 @@ class Forwarder(Process):
                  rabbitmq_conn_params: str,
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
-                 stream_logs: bool = False,
                  logging_level=logging.INFO,
                  heartbeat_period=30,
                  keys_dir=os.path.abspath('.curve')):
@@ -90,9 +89,6 @@ class Forwarder(Process):
         redis_port : int
              redis port. Default: 6379
 
-        stream_logs: Bool
-             When enabled, forwarder will stream logs to STDOUT/ERR.
-
         logging_level: int
              Logging level. Default: logging.INFO
 
@@ -118,10 +114,6 @@ class Forwarder(Process):
         self.redis_pubsub = RedisPubSub(hostname=redis_address, port=redis_port)
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
         self.endpoint_db.connect()
-
-        global logger
-        if stream_logs:
-            logger = set_stream_logger(level=logging_level)
 
         logger.info(f"Initializing forwarder v{funcx_forwarder.__version__}")
         logger.info(f"Forwarder running on public address: {self.address}")
@@ -154,38 +146,42 @@ class Forwarder(Process):
         }
         Responses are of the form:
         """
-        while not kill_event.is_set():
-            command = self.command_queue.get()
-            logger.debug(f"[COMMAND] Received command {command}")
-            if command['command'] == 'LIVENESS':
-                response = {'response': True,
-                            'id': command.get('id')}
-            elif command['command'] == 'TERMINATE':
-                logger.info("[COMMAND] Received TERMINATE command")
-                response = {'response': True,
-                            'id': command.get('id')}
-                kill_event.set()
-            elif command['command'] == 'ADD_ENDPOINT_TO_REGISTRY':
-                logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
-                result = self.add_endpoint_to_registry(command['endpoint_id'],
-                                                       command['endpoint_address'],
-                                                       command['client_public_key'])
+        try:
+            while not kill_event.is_set():
+                command = self.command_queue.get()
+                logger.debug(f"[COMMAND] Received command {command}")
+                if command['command'] == 'LIVENESS':
+                    response = {'response': True,
+                                'id': command.get('id')}
+                elif command['command'] == 'TERMINATE':
+                    logger.info("[COMMAND] Received TERMINATE command")
+                    response = {'response': True,
+                                'id': command.get('id')}
+                    kill_event.set()
+                elif command['command'] == 'ADD_ENDPOINT_TO_REGISTRY':
+                    logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
+                    result = self.add_endpoint_to_registry(command['endpoint_id'],
+                                                           command['endpoint_address'],
+                                                           command['client_public_key'])
 
-                response = {'response': result,
-                            'id': command.get('id'),
-                            'endpoint_id': command['endpoint_id'],
-                            'forwarder_pubkey': self.forwarder_pubkey,
-                            'public_ip': self.address,
-                            'tasks_port': self.tasks_port,
-                            'results_port': self.results_port,
-                            'commands_port': self.commands_port}
+                    response = {'response': result,
+                                'id': command.get('id'),
+                                'endpoint_id': command['endpoint_id'],
+                                'forwarder_pubkey': self.forwarder_pubkey,
+                                'public_ip': self.address,
+                                'tasks_port': self.tasks_port,
+                                'results_port': self.results_port,
+                                'commands_port': self.commands_port}
 
-            else:
-                response = {'response': False,
-                            'id': command.get('id'),
-                            'reason': 'Unknown command'}
+                else:
+                    response = {'response': False,
+                                'id': command.get('id'),
+                                'reason': 'Unknown command'}
 
-            self.response_queue.put(response)
+                self.response_queue.put(response)
+        except Exception:
+            logger.exception('Caught exception while processing command')
+            sys.exit(-1)
 
     def add_endpoint_to_registry(self, endpoint_id, endpoint_address, key):
         """ Add new client keys to the zmq authenticator
@@ -422,38 +418,41 @@ class Forwarder(Process):
     def run(self):
         """ Process entry point
         """
-        logger.info("[MAIN] Loop starting")
-        logger.info("[MAIN] Connecting to redis")
-        logger.info(f"[MAIN] Forwarder listening for tasks on: {self.tasks_port}")
-        logger.info(f"[MAIN] Forwarder listening for results on: {self.results_port}")
-        logger.info(f"[MAIN] Forwarder issuing commands on: {self.commands_port}")
         try:
-            self.redis_pubsub.connect()
+            logger.info("[MAIN] Loop starting")
+            logger.info("[MAIN] Connecting to redis")
+            logger.info(f"[MAIN] Forwarder listening for tasks on: {self.tasks_port}")
+            logger.info(f"[MAIN] Forwarder listening for results on: {self.results_port}")
+            logger.info(f"[MAIN] Forwarder issuing commands on: {self.commands_port}")
+            try:
+                self.redis_pubsub.connect()
+            except Exception:
+                logger.exception("[MAIN] Failed to connect to Redis")
+                raise
+
+            self.initialize_endpoint_queues()
+            self._command_processor_thread = threading.Thread(target=self.command_processor,
+                                                              args=(self.kill_event,),
+                                                              name="forwarder-command-processor")
+            self._command_processor_thread.start()
+
+            while True:
+                if self.kill_event.is_set():
+                    logger.critical("Kill event set. Starting termination sequence")
+                    # 1. [TODO] Unsubscribe from all
+                    # 2. [TODO] Flush all tasks received back to their queues for reprocessing.
+                    # 3. [TODO] Figure out how we can trigger a scaling event to replace lost forwarder?
+
+                # Send heartbeats to every connected manager
+                self.heartbeat()
+
+                self.handle_endpoint_registration()
+                # [TODO] This step could be in a timed loop. Ideally after we have a perf study
+                self.forward_task_to_endpoint()
+                self.handle_results()
         except Exception:
-            logger.exception("[MAIN] Failed to connect to Redis")
-            raise
-
-        self.initialize_endpoint_queues()
-        self._command_processor_thread = threading.Thread(target=self.command_processor,
-                                                          args=(self.kill_event,),
-                                                          name="forwarder-command-processor")
-        self._command_processor_thread.start()
-
-        while True:
-
-            if self.kill_event.is_set():
-                logger.critical("Kill event set. Starting termination sequence")
-                # 1. [TODO] Unsubscribe from all
-                # 2. [TODO] Flush all tasks received back to their queues for reprocessing.
-                # 3. [TODO] Figure out how we can trigger a scaling event to replace lost forwarder?
-
-            # Send heartbeats to every connected manager
-            self.heartbeat()
-
-            self.handle_endpoint_registration()
-            # [TODO] This step could be in a timed loop. Ideally after we have a perf study
-            self.forward_task_to_endpoint()
-            self.handle_results()
+            logger.exception('Caught exception while running forwarder')
+            sys.exit(-1)
 
 
 if __name__ == '__main__':

@@ -2,11 +2,14 @@ import redis
 import queue
 import uuid
 import time
+import logging
 
 # from forwarder.queues.base import FuncxQueue, NotConnected
 import json
 
 from funcx_endpoint.queues.base import NotConnected
+
+logger = logging.getLogger(__name__)
 
 
 class EndpointDB(object):
@@ -43,8 +46,8 @@ class EndpointDB(object):
             if not self.redis_client:
                 self.redis_client = redis.StrictRedis(host=self.hostname, port=self.port, decode_responses=True)
         except redis.exceptions.ConnectionError:
-            print("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
-                                                                                  self.port))
+            logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
+                                                                                             self.port))
             raise
 
     def get(self, endpoint_id, timeout=1, last=60 * 4):
@@ -60,7 +63,6 @@ class EndpointDB(object):
         """
         try:
             end = min(self.redis_client.llen(f'ep_status_{endpoint_id}'), last)
-            print("Total len :", end)
             items = self.redis_client.lrange(f'ep_status_{endpoint_id}', 0, end)
             if not items:
                 raise queue.Empty
@@ -72,7 +74,7 @@ class EndpointDB(object):
             raise NotConnected(self)
 
         except redis.exceptions.ConnectionError:
-            print(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
+            logger.exception(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
             raise
 
         return items
@@ -107,7 +109,6 @@ class EndpointDB(object):
             raise Exception("this method isn't ready hah")
             endpoint_id = last = None
             end = min(self.redis_client.llen(f'ep_status_{endpoint_id}'), last)
-            print("Total len :", end)
             items = self.redis_client.lrange(f'ep_status_{endpoint_id}', 0, end)
             if not items:
                 raise queue.Empty
@@ -119,7 +120,7 @@ class EndpointDB(object):
             raise NotConnected(self)
 
         except redis.exceptions.ConnectionError:
-            print(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
+            logger.exception(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
             raise
 
         return items
@@ -145,7 +146,7 @@ class EndpointDB(object):
         except AttributeError:
             raise NotConnected(self)
         except redis.exceptions.ConnectionError:
-            print("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname, self.port))
+            logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname, self.port))
             raise
 
     @property

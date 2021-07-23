@@ -9,16 +9,19 @@ import logging
 import pika
 import redis
 import time
+import sys
 
 from flask import Flask, jsonify
 from flask import request
 
 from funcx_forwarder.version import VERSION, MIN_EP_VERSION
 # from funcx_forwarder.forwarderobject import spawn_forwarder
+from funcx_forwarder import set_stream_logger
 from funcx_forwarder.forwarder import Forwarder
 from multiprocessing import Queue
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 
 
 @app.route('/ping')
@@ -44,7 +47,7 @@ def get_map_json():
     redis_client = app.config['redis_client']
     for key in redis_client.keys('ep_status_*'):
         try:
-            print("Getting key {}".format(key))
+            logger.debug("Getting key {}".format(key))
             items = redis_client.lrange(key, 0, 0)
             if items:
                 last = json.loads(items[0])
@@ -52,7 +55,6 @@ def get_map_json():
                 continue
             ep_id = key.split('_')[2]
             ep_meta = redis_client.hgetall('endpoint:{}'.format(ep_id))
-            print(ep_meta, last)
             lat, lon = ep_meta['loc'].split(',')
             current = {'org': ep_meta['org'].replace(',', '. '),
                        'core_hrs': last['total_core_hrs'],
@@ -60,11 +62,10 @@ def get_map_json():
                        'long': lon}
             results.append(current)
 
-        except Exception as e:
-            print(f"Failed to parse for key {key}")
-            print(f"Error : {e}")
+        except Exception:
+            logger.exception(f"Failed to parse for key {key}")
 
-    print("To return : ", results)
+    logger.debug(f"To return : {results}")
     return dict(data=results)
 
 
@@ -76,7 +77,7 @@ def get_map():
     csv_string = "org,core_hrs,lat,long\n</br>"
     for key in redis_client.keys('ep_status_*'):
         try:
-            print("Getting key {}".format(key))
+            logger.debug("Getting key {}".format(key))
             items = redis_client.lrange(key, 0, 0)
             if items:
                 last = json.loads(items[0])
@@ -84,13 +85,11 @@ def get_map():
                 continue
             ep_id = key.split('_')[2]
             ep_meta = redis_client.hgetall('endpoint:{}'.format(ep_id))
-            print(ep_meta, last)
             current = "{},{},{}\n</br>".format(ep_meta['org'].replace(',', '.'), last['total_core_hrs'], ep_meta['loc'])
             csv_string += current
 
-        except Exception as e:
-            print(f"Failed to parse for key {key}")
-            print(f"Error : {e}")
+        except Exception:
+            logger.exception(f"Failed to parse for key {key}")
 
     return csv_string
 
@@ -101,8 +100,8 @@ def wait_for_forwarder(fw):
 
 @app.route('/test/<method>', methods=['GET'])
 def test(method):
-    print(f"[DEBUG]: In test with {method}")
-    print(app.config['forwarder_command'])
+    logger.debug(f"In test with {method}")
+    logger.debug(app.config['forwarder_command'])
 
     command_id = int(time.time())
     if method == 'TERMINATE':
@@ -116,7 +115,7 @@ def test(method):
                    'endpoint_id': 'Foooo',
                    'id': command_id}
     else:
-        print("Unknown method")
+        logger.debug("Unknown method")
         return 'None'
 
     app.config['forwarder_command'].put(command)
@@ -134,14 +133,14 @@ def register():
     2. Pass connection info back as a json response.
     """
     reg_info = request.get_json()
-    print("Registering endpoint : ", reg_info['endpoint_id'])
+    logger.debug(f"Registering endpoint : {reg_info['endpoint_id']}")
     app.config['forwarder_command'].put({'command': 'ADD_ENDPOINT_TO_REGISTRY',
                                          'endpoint_id': reg_info['endpoint_id'],
                                          'endpoint_address': reg_info['endpoint_addr'],
                                          'client_public_key': reg_info.get('client_public_key', None),
                                          'id': 0})
     ret_package = app.config['forwarder_response'].get()
-    print(f"Registration response : {ret_package}")
+    logger.debug(f"Registration response : {ret_package}")
     return ret_package
 
 
@@ -151,6 +150,14 @@ def list_mappings():
 
 
 def cli():
+    try:
+        cli_run()
+    except Exception:
+        logger.exception('Caught exception while starting forwarder')
+        sys.exit(-1)
+
+
+def cli_run():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", default=8080,
                         help="Port at which the service will listen on")
@@ -164,8 +171,6 @@ def cli():
                         help="Redis port")
     parser.add_argument("--rabbitmqhost", required=True,
                         help="RabbitMQ host address")
-    parser.add_argument("--stream_logs", action='store_true',
-                        help="Enable streaming logging to STDOUT/ERR")
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
     parser.add_argument("-v", "--version", action='store_true',
@@ -173,9 +178,13 @@ def cli():
 
     args = parser.parse_args()
 
+    logging_level = logging.DEBUG if args.debug else logging.INFO
+    global logger
+    logger = set_stream_logger(level=logging_level)
+
     if args.version is True:
-        print(f"Forwarder version: {VERSION}")
-        print(f"Forwarder minimum endpoint version: {MIN_EP_VERSION}")
+        logger.debug(f"Forwarder version: {VERSION}")
+        logger.debug(f"Forwarder minimum endpoint version: {MIN_EP_VERSION}")
 
     app.config['address'] = args.address
     app.config['ep_mapping'] = {}
@@ -199,8 +208,7 @@ def cli():
                    args.redishost,
                    rabbitmq_conn_params,
                    # endpoint_ports=(55008, 55009, 55010),   # Only for debug
-                   stream_logs=args.stream_logs,
-                   logging_level=logging.DEBUG if args.debug else logging.INFO,
+                   logging_level=logging_level,
                    redis_port=args.redisport)
     fw.start()
     app.config['forwarder_process'] = fw
@@ -208,7 +216,7 @@ def cli():
     # Run a test command to make sure the forwarder is online
     app.config['forwarder_command'].put({'command': 'LIVENESS', 'id': 0})
     response = app.config['forwarder_response'].get()
-    print(response)
+    logger.debug(response)
 
     # DEBUG ---- <WARNING THIS IS ONLY FOR DEBUG>
     """
@@ -225,25 +233,24 @@ def cli():
     """
 
     try:
-        print("Starting forwarder service")
+        logger.debug("Starting forwarder service")
         # **WARNING** : DO NOT run this in debug=True mode. It copies the
         # forwarder process into the 2 process mode flask runs when in debug.
         app.run(host="0.0.0.0", port=int(args.port), debug=False)
 
     except KeyboardInterrupt:
-        print("Exiting from keyboard interrupt")
+        logger.debug("Exiting from keyboard interrupt")
 
     except Exception as e:
         # This doesn't do anything
-        print("Caught exception : {}".format(e))
+        logger.debug("Caught exception : {}".format(e))
         exit(-1)
 
     finally:
-        print("Graceful exit")
+        logger.debug("Graceful exit")
         app.config['forwarder_command'].put({'command': 'TERMINATE'})
         fw.stop()
 
 
 if __name__ == '__main__':
-    print("Entering forwarder service main.........")
     cli()

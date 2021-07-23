@@ -1,8 +1,11 @@
 import redis
 import queue
 import json
+import logging
 
 from funcx_forwarder.queues.redis.tasks import Task, TaskState
+
+logger = logging.getLogger(__name__)
 
 
 class NotConnected(Exception):
@@ -46,8 +49,8 @@ class RedisQueue(object):
             if not self.redis_client:
                 self.redis_client = redis.StrictRedis(host=self.hostname, port=self.port, decode_responses=True)
         except redis.exceptions.ConnectionError:
-            print("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
-                                                                                  self.port))
+            logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
+                                                                                             self.port))
 
             raise
 
@@ -77,7 +80,7 @@ class RedisQueue(object):
             raise NotConnected(self)
 
         except redis.exceptions.ConnectionError:
-            print(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
+            logger.debug(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
             raise
 
         return task_id, task_info
@@ -101,8 +104,8 @@ class RedisQueue(object):
         except AttributeError:
             raise NotConnected(self)
         except redis.exceptions.ConnectionError:
-            print("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
-                                                                                  self.port))
+            logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
+                                                                                             self.port))
             raise
 
     @property
