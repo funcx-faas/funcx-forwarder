@@ -302,7 +302,7 @@ class Forwarder(Process):
             "function_id": task.function_id,
             "endpoint_id": task.endpoint,
             "container_id": task.container,
-            "task_transition": True
+            "type": "task_transition"
         }
         logger.info(transition_name, extra=extra_logging)
 
