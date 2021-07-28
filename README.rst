@@ -83,6 +83,26 @@ Once you have this running, we can update the endpoint configs to point to this 
 Docker Container
 ================
 
-You can run the service inside a docker container.
+You can run the service inside a docker container. To build the container locally:
 
->> docker run --rm -it -p 8080:8080  -e "ADVERTISED_FORWARDER_ADDRESS=host.docker.internal" -e "REDIS_HOST=localhost" -e "REDIS_PORT=6123" funcx/forwarder:dev
+.. code-block:: bash
+
+    docker build -t funcx/forwarder:dev .
+
+Then, run the container:
+
+.. code-block:: bash
+
+    # Assumes that Redis and RabbitMQ are running locally in a container
+    docker run --rm -it -p 8080:8080 \
+      -e "ADVERTISED_FORWARDER_ADDRESS=host.docker.internal" \
+      -e "REDIS_HOST=host.docker.internal" \
+      -e "REDIS_PORT=6379" \
+      -e "FUNCX_RABBITMQ_SERVICE_HOST=host.docker.internal" \
+      funcx/forwarder:dev
+
+Once it's running, you can hit the forwarder's endpoints:
+
+.. code-block:: bash
+
+    curl http://localhost:8080/version

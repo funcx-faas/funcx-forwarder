@@ -82,8 +82,8 @@ class TaskQueue(object):
         self.poller.register(self.zmq_socket, zmq.POLLOUT)
         self.poller.register(self.zmq_socket, zmq.POLLIN)
         os.makedirs(self.keys_dir, exist_ok=True)
-        logger.info("Client key store is at {os.path.abspath(self.keys_dir)}")
-        logger.info("Initialized Taskqueue:{self.mode} on port:{self.port}")
+        logger.info(f"Client key store is at {os.path.abspath(self.keys_dir)}")
+        logger.info(f"Initialized Taskqueue:{self.mode} on port:{self.port}")
 
     def zmq_context(self):
         return self.context
