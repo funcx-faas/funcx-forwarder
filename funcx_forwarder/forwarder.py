@@ -53,8 +53,8 @@ class Forwarder(Process):
                        +-------------+     +--------------------+
                        |  Endpoint 1 | ... |     Endpoint N     |
                        +-------------+     +--------------------+
-    
-    
+
+
     Endpoint States
     ---------------
     - Registered: Endpoint has been registered with the service but has not yet connected
@@ -175,8 +175,8 @@ class Forwarder(Process):
                 elif command['command'] == 'REGISTER_ENDPOINT':
                     logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
                     result = self.register_endpoint(command['endpoint_id'],
-                                                           command['endpoint_address'],
-                                                           command['client_public_key'])
+                                                    command['endpoint_address'],
+                                                    command['client_public_key'])
 
                     response = {'response': result,
                                 'id': command.get('id'),
