@@ -282,7 +282,7 @@ class Forwarder(Process):
         dest_endpoint_list = list(self.connected_endpoints.keys())
         for dest_endpoint in dest_endpoint_list:
             logger.debug(f"Sending heartbeat to {dest_endpoint}", extra={
-                "log_type": "endpoint_heartbeat",
+                "log_type": "endpoint_heartbeat_sent",
                 "endpoint_id": dest_endpoint
             })
             msg = Heartbeat(endpoint_id=dest_endpoint)
@@ -304,11 +304,10 @@ class Forwarder(Process):
             b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
-            reg_message_dict = pickle.loads(reg_message).__dict__
             logger.info("endpoint_connected", {
                 "log_type": "endpoint_connected",
                 "endpoint_id": ep_id,
-                "registration_message": reg_message_dict
+                "registration_message": pickle.loads(reg_message)
             })
 
             if ep_id in self.connected_endpoints:
@@ -381,9 +380,13 @@ class Forwarder(Process):
         try:
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
+            endpoint_id = b_ep_id.decode('utf-8')
 
             if b_message == b'HEARTBEAT':
-                logger.debug(f"Received HEARTBEAT from {b_ep_id} over results channel")
+                logger.debug(f"Received heartbeat from {endpoint_id} over results channel", extra={
+                    "log_type": "endpoint_heartbeat_received",
+                    "endpoint_id": endpoint_id
+                })
                 return
 
             try:
@@ -392,7 +395,6 @@ class Forwarder(Process):
                 logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
 
             if isinstance(message, EPStatusReport):
-                endpoint_id = b_ep_id.decode('utf-8')
                 logger.debug("endpoint_status_message", extra={
                     "log_type": "endpoint_status_message",
                     "endpoint_id": endpoint_id,
