@@ -372,10 +372,15 @@ class Forwarder(Process):
                 logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
 
             if isinstance(message, EPStatusReport):
-                logger.debug(f"Endpoint status message {message.__dict__} from {b_ep_id.decode('utf-8')}")
+                endpoint_id = b_ep_id.decode('utf-8')
+                logger.debug("endpoint_status_message", extra={
+                    "log_type": "endpoint_status_message",
+                    "endpoint_id": endpoint_id,
+                    "endpoint_status_message": message.__dict__
+                })
                 # Update endpoint status
                 try:
-                    self.endpoint_db.put(b_ep_id.decode('utf-8'), message.ep_status)
+                    self.endpoint_db.put(endpoint_id, message.ep_status)
                 except Exception:
                     logger.error("Caught error while trying to push endpoint status data into redis")
 
