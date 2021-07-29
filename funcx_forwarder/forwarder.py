@@ -269,7 +269,10 @@ class Forwarder(Process):
         logger.info("Heartbeat")
         dest_endpoint_list = list(self.connected_endpoints.keys())
         for dest_endpoint in dest_endpoint_list:
-            logger.debug(f"Sending heartbeat to {dest_endpoint}")
+            logger.debug(f"Sending heartbeat to {dest_endpoint}", extra={
+                "log_type": "endpoint_heartbeat",
+                "endpoint_id": dest_endpoint
+            })
             msg = Heartbeat(endpoint_id=dest_endpoint)
             try:
                 self.tasks_q.put(dest_endpoint.encode('utf-8'),
