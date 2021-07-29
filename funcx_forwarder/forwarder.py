@@ -189,6 +189,11 @@ class Forwarder(Process):
         Registering an existing endpoint_id is allowed
         """
         logger.info(f"Endpoint_id:{endpoint_id} added to registry")
+        logger.info("endpoint_connected", extra={
+            "log_type": "endpoint_connected",
+            "endpoint_id": endpoint_id
+        })
+
         self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
                                                'client_public_key': key}
         self.update_endpoint_metadata(endpoint_id, endpoint_address)
@@ -236,6 +241,11 @@ class Forwarder(Process):
         will work on WAN networks with latencies.
         """
         logger.debug(f"Unregistering endpoint: {endpoint_id}")
+        logger.info("endpoint_disconnected", extra={
+            "log_type": "endpoint_disconnected",
+            "endpoint_id": endpoint_id
+        })
+
         self.redis_pubsub.unsubscribe(endpoint_id)
         # TODO: YADU Combine the registry with connected_endpoints
         self.endpoint_registry.pop(endpoint_id, None)
