@@ -61,6 +61,7 @@ class TaskQueue(object):
             logger.debug("Configuring server")
             self.zmq_socket = self.context.socket(zmq.ROUTER)
             self.zmq_socket.set(zmq.ROUTER_MANDATORY, 1)
+            self.zmq_socket.set(zmq.ROUTER_HANDOVER, 1)
             self.setup_server_auth()
             self.zmq_socket.bind("tcp://*:{}".format(port))
         elif self.mode == 'client':
