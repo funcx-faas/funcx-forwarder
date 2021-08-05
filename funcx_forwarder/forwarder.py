@@ -53,6 +53,20 @@ class Forwarder(Process):
                        +-------------+     +--------------------+
                        |  Endpoint 1 | ... |     Endpoint N     |
                        +-------------+     +--------------------+
+
+
+    Endpoint States
+    ---------------
+    - Registered: Endpoint has been registered with the service but has not yet connected
+    - Connected: Endpoint has connected, meaning ZMQ messages can be sent and received
+    - Disconnected: ZMQ message sending is failing for this endpoint, making it disconnected
+
+    Endpoint State Transitions
+    --------------------------
+    Registered -> Connected => Everything is working as expected (Endpoint is registered and ZMQ is working)
+    Registered -> nothing => Connectivity issue over the 5500* ports using ZMQ
+    Connected -> Registered => Forwarder down, endpoint re-registers
+    Connected -> Disconnected => Endpoint down / connection down (Could be transient network issue where endpoint is live with tasks/results)
     """
 
     def __init__(self,
@@ -158,11 +172,11 @@ class Forwarder(Process):
                     response = {'response': True,
                                 'id': command.get('id')}
                     kill_event.set()
-                elif command['command'] == 'ADD_ENDPOINT_TO_REGISTRY':
+                elif command['command'] == 'REGISTER_ENDPOINT':
                     logger.info("[COMMAND] Received REGISTER_ENDPOINT command")
-                    result = self.add_endpoint_to_registry(command['endpoint_id'],
-                                                           command['endpoint_address'],
-                                                           command['client_public_key'])
+                    result = self.register_endpoint(command['endpoint_id'],
+                                                    command['endpoint_address'],
+                                                    command['client_public_key'])
 
                     response = {'response': result,
                                 'id': command.get('id'),
@@ -183,12 +197,16 @@ class Forwarder(Process):
             logger.exception('Caught exception while processing command')
             sys.exit(-1)
 
-    def add_endpoint_to_registry(self, endpoint_id, endpoint_address, key):
+    def register_endpoint(self, endpoint_id, endpoint_address, key):
         """ Add new client keys to the zmq authenticator
 
         Registering an existing endpoint_id is allowed
         """
-        logger.info(f"Endpoint_id:{endpoint_id} added to registry")
+        logger.info("endpoint_registered", extra={
+            "log_type": "endpoint_registered",
+            "endpoint_id": endpoint_id
+        })
+
         self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
                                                'client_public_key': key}
         self.update_endpoint_metadata(endpoint_id, endpoint_address)
@@ -228,14 +246,18 @@ class Forwarder(Process):
                                     mode='server')
         return
 
-    def unregister_endpoint(self, endpoint_id):
+    def disconnect_endpoint(self, endpoint_id):
         """ Unsubscribes from Redis pubsub and "removes" endpoint from the tasks channel
 
         Triggered by either heartbeats or tasks not getting delivered
         TODO: This needs some extensive testing. It is unclear how well detecting failures
         will work on WAN networks with latencies.
         """
-        logger.debug(f"Unregistering endpoint: {endpoint_id}")
+        logger.info("endpoint_disconnected", extra={
+            "log_type": "endpoint_disconnected",
+            "endpoint_id": endpoint_id
+        })
+
         self.redis_pubsub.unsubscribe(endpoint_id)
         # TODO: YADU Combine the registry with connected_endpoints
         self.endpoint_registry.pop(endpoint_id, None)
@@ -259,7 +281,10 @@ class Forwarder(Process):
         logger.info("Heartbeat")
         dest_endpoint_list = list(self.connected_endpoints.keys())
         for dest_endpoint in dest_endpoint_list:
-            logger.debug(f"Sending heartbeat to {dest_endpoint}")
+            logger.debug(f"Sending heartbeat to {dest_endpoint}", extra={
+                "log_type": "endpoint_heartbeat_sent",
+                "endpoint_id": dest_endpoint
+            })
             msg = Heartbeat(endpoint_id=dest_endpoint)
             try:
                 self.tasks_q.put(dest_endpoint.encode('utf-8'),
@@ -268,18 +293,22 @@ class Forwarder(Process):
 
             except (zmq.error.ZMQError, zmq.Again):
                 logger.exception(f"Endpoint:{dest_endpoint} is unreachable over heartbeats")
-                self.unregister_endpoint(dest_endpoint)
+                self.disconnect_endpoint(dest_endpoint)
         self._last_heartbeat = time.time()
 
-    def handle_endpoint_registration(self):
-        ''' Receive endpoint registration messages. Only registration messages
+    def handle_endpoint_connection(self):
+        ''' Receive endpoint connection messages. Only connection messages
         are sent from the interchange -> forwarder on the task_q
         '''
         try:
             b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
-            logger.info(f'Endpoint:{ep_id} connected with registration {pickle.loads(reg_message)}')
+            logger.info("endpoint_connected", {
+                "log_type": "endpoint_connected",
+                "endpoint_id": ep_id,
+                "registration_message": pickle.loads(reg_message)
+            })
 
             if ep_id in self.connected_endpoints:
                 # This really shouldn't happen, could be a reconnect ?
@@ -337,7 +366,7 @@ class Forwarder(Process):
                                  zmq_task.pack())
             except (zmq.error.ZMQError, zmq.Again):
                 logger.exception(f"Endpoint:{dest_endpoint} is unreachable")
-                self.unregister_endpoint(dest_endpoint)
+                self.disconnect_endpoint(dest_endpoint)
             except Exception:
                 logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
                 pass
@@ -351,9 +380,13 @@ class Forwarder(Process):
         try:
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
+            endpoint_id = b_ep_id.decode('utf-8')
 
             if b_message == b'HEARTBEAT':
-                logger.debug(f"Received HEARTBEAT from {b_ep_id} over results channel")
+                logger.debug(f"Received heartbeat from {endpoint_id} over results channel", extra={
+                    "log_type": "endpoint_heartbeat_received",
+                    "endpoint_id": endpoint_id
+                })
                 return
 
             try:
@@ -362,10 +395,14 @@ class Forwarder(Process):
                 logger.exception(f"Failed to unpickle message from results_q, message:{b_message}")
 
             if isinstance(message, EPStatusReport):
-                logger.debug(f"Endpoint status message {message.__dict__} from {b_ep_id.decode('utf-8')}")
+                logger.debug("endpoint_status_message", extra={
+                    "log_type": "endpoint_status_message",
+                    "endpoint_id": endpoint_id,
+                    "endpoint_status_message": message.__dict__
+                })
                 # Update endpoint status
                 try:
-                    self.endpoint_db.put(b_ep_id.decode('utf-8'), message.ep_status)
+                    self.endpoint_db.put(endpoint_id, message.ep_status)
                 except Exception:
                     logger.error("Caught error while trying to push endpoint status data into redis")
 
@@ -446,7 +483,7 @@ class Forwarder(Process):
                 # Send heartbeats to every connected manager
                 self.heartbeat()
 
-                self.handle_endpoint_registration()
+                self.handle_endpoint_connection()
                 # [TODO] This step could be in a timed loop. Ideally after we have a perf study
                 self.forward_task_to_endpoint()
                 self.handle_results()
