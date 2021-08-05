@@ -133,14 +133,21 @@ def register():
     2. Pass connection info back as a json response.
     """
     reg_info = request.get_json()
-    logger.debug(f"Registering endpoint : {reg_info['endpoint_id']}")
+    endpoint_id = reg_info['endpoint_id']
+    logger.debug(f"Registering endpoint : {endpoint_id}", extra={
+        "log_type": "forwarder_endpoint_registration_start",
+        "endpoint_id": endpoint_id
+    })
     app.config['forwarder_command'].put({'command': 'REGISTER_ENDPOINT',
                                          'endpoint_id': reg_info['endpoint_id'],
                                          'endpoint_address': reg_info['endpoint_addr'],
                                          'client_public_key': reg_info.get('client_public_key', None),
                                          'id': 0})
     ret_package = app.config['forwarder_response'].get()
-    logger.debug(f"Registration response : {ret_package}")
+    logger.debug("forwarder_endpoint_registration_response", extra={
+        "log_type": "forwarder_endpoint_registration_response",
+        "registration_response": ret_package
+    })
     return ret_package
 
 
