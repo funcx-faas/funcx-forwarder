@@ -61,12 +61,38 @@ class Forwarder(Process):
     - Connected: Endpoint has connected, meaning ZMQ messages can be sent and received
     - Disconnected: ZMQ message sending is failing for this endpoint, making it disconnected
 
+    * Endpoints always start in the Registered state. Before that, the forwarder does not know they exist
+    * Results can arrive on the forwarder from an endpoint when it is in any state. See the NOTE below at self.results_q.get
+
     Endpoint State Transitions
     --------------------------
-    Registered -> Connected => Everything is working as expected (Endpoint is registered and ZMQ is working)
-    Registered -> nothing => Connectivity issue over the 5500* ports using ZMQ
-    Connected -> Registered => Forwarder down, endpoint re-registers
-    Connected -> Disconnected => Endpoint down / connection down (Could be transient network issue where endpoint is live with tasks/results)
+    Registered -> Connected =>
+        Everything is working as expected (Endpoint is registered and ZMQ is working)
+
+    Registered -> nothing =>
+        Connectivity issue over the 5500* ports using ZMQ
+
+    Connected -> (Disconnected*) -> Registered =>
+        Forwarder down, endpoint re-registers. Alternatively, user stops an endpoint
+        and starts it quickly after, before it becomes Disconnected on its own. The
+        (Disconnected*) transition here indicates that the forwarder disconnects the
+        endpoint to remove any lingering connection data in memory before moving it
+        into the Registered state immediately after.
+
+    Connected -> Disconnected =>
+        Endpoint down / connection down (Could be transient network issue where
+        endpoint is live with tasks/results)
+
+    Disconnected -> Registered =>
+        Endpoint re-registers on its own if the connection was down but the connection comes
+        back up again (The endpoint must detect this and re-register). Alternatively, user
+        manually restarts endpoint after it was Disconnected
+
+    Disconnected -> Connected =>
+        Harmless transition which skips re-registration. Endpoints only really ever
+        need to register with a forwarder once (Being in Disconnected state implies the
+        endpoint was once in Registered state). This can only be achieved by modifying
+        the FuncX endpoint code.
     """
 
     def __init__(self,
@@ -123,7 +149,6 @@ class Forwarder(Process):
         self.kill_event = Event()
         self.heartbeat_period = heartbeat_period
         self._last_heartbeat = time.time()
-        self.endpoint_registry = {}
         self.keys_dir = keys_dir
         self.redis_pubsub = RedisPubSub(hostname=redis_address, port=redis_port)
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
@@ -202,13 +227,17 @@ class Forwarder(Process):
 
         Registering an existing endpoint_id is allowed
         """
+        logger.debug("Cleaning up any existing endpoint connection data", extra={
+            "log_type": "endpoint_registration_cleanup",
+            "endpoint_id": endpoint_id
+        })
+        self.disconnect_endpoint(endpoint_id)
+
         logger.info("endpoint_registered", extra={
             "log_type": "endpoint_registered",
             "endpoint_id": endpoint_id
         })
 
-        self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
-                                               'client_public_key': key}
         self.update_endpoint_metadata(endpoint_id, endpoint_address)
 
         self.tasks_q.add_client_key(endpoint_id, key)
@@ -253,15 +282,13 @@ class Forwarder(Process):
         TODO: This needs some extensive testing. It is unclear how well detecting failures
         will work on WAN networks with latencies.
         """
-        logger.info("endpoint_disconnected", extra={
-            "log_type": "endpoint_disconnected",
-            "endpoint_id": endpoint_id
-        })
-
         self.redis_pubsub.unsubscribe(endpoint_id)
-        # TODO: YADU Combine the registry with connected_endpoints
-        self.endpoint_registry.pop(endpoint_id, None)
-        self.connected_endpoints.pop(endpoint_id, None)
+        old_endpoint = self.connected_endpoints.pop(endpoint_id, None)
+        if old_endpoint is not None:
+            logger.info("endpoint_disconnected", extra={
+                "log_type": "endpoint_disconnected",
+                "endpoint_id": endpoint_id
+            })
 
     def add_endpoint_keys(self, ep_id, ep_key):
         """ To remove. this is not used.
@@ -312,7 +339,10 @@ class Forwarder(Process):
 
             if ep_id in self.connected_endpoints:
                 # This really shouldn't happen, could be a reconnect ?
-                logger.warning(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list")
+                logger.warning(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list", extra={
+                    "log_type": "endpoint_reconnect_warning",
+                    "endpoint_id": ep_id
+                })
             self.connected_endpoints[ep_id] = {'registration_message': reg_message,
                                                'missed_heartbeats': 0}
 
@@ -345,17 +375,25 @@ class Forwarder(Process):
         task = None
         try:
             dest_endpoint, task = self.redis_pubsub.get(timeout=0)
-            logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}")
+            logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}", extra={
+                "log_type": "forwarder_redis_task_get",
+                "endpoint_id": dest_endpoint
+            })
         except queue.Empty:
             return 0
         except Exception:
             logger.exception("Caught exception waiting for message from REDIS")
             return 0
 
-        if dest_endpoint not in self.endpoint_registry:
+        if dest_endpoint not in self.connected_endpoints:
             # At this point we should be unsubscribed and receiving only messages
             # from the TCP buffers.
+            logger.warning(f"Putting back REDIS message for unconnected endpoint: {dest_endpoint}:{task}", extra={
+                "log_type": "forwarder_redis_task_put",
+                "endpoint_id": dest_endpoint
+            })
             self.redis_pubsub.put(dest_endpoint, task)
+            self.redis_pubsub.unsubscribe(dest_endpoint)
         else:
             try:
                 logger.info(f"Sending task:{task.task_id} to endpoint:{dest_endpoint}")
@@ -366,9 +404,13 @@ class Forwarder(Process):
                                  zmq_task.pack())
             except (zmq.error.ZMQError, zmq.Again):
                 logger.exception(f"Endpoint:{dest_endpoint} is unreachable")
+                # put task back in redis since it was not sent to endpoint
+                self.redis_pubsub.put(dest_endpoint, task)
                 self.disconnect_endpoint(dest_endpoint)
             except Exception:
                 logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
+                # put task back in redis since it was not sent to endpoint
+                self.redis_pubsub.put(dest_endpoint, task)
                 pass
             else:
                 self.log_task_transition(task, 'dispatched_to_endpoint')
@@ -379,8 +421,16 @@ class Forwarder(Process):
         '''
         try:
             # timeout in ms, when 0 it's nonblocking
+            # NOTE: Results can arrive on this queue when the endpoint is in any of the 3 states
+            # (Registered, Connected, Disconnected), and we will accept the results. This is because
+            # we do not tie the connection status of this queue to the state of the endpoint, as
+            # doing so could mean rejecting perfectly good results on a working ZMQ connection.
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
             endpoint_id = b_ep_id.decode('utf-8')
+
+            # TODO: If we get a result here can we transition endpoint in Disconnected/Registered
+            # state to Connected state? The drawback may be that the results_q could be working while
+            # sending over the tasks_q could be broken, being a different ZMQ queue.
 
             if b_message == b'HEARTBEAT':
                 logger.debug(f"Received heartbeat from {endpoint_id} over results channel", extra={
