@@ -316,20 +316,24 @@ class Forwarder(Process):
             ep_id = b_ep_id.decode('utf-8')
 
             if ep_id in self.connected_endpoints:
-                # disconnect endpoint before allowing a reconnect
-                self.disconnect_endpoint(ep_id)
-
-            logger.info("endpoint_connected", {
-                "log_type": "endpoint_connected",
-                "endpoint_id": ep_id,
-                "registration_message": pickle.loads(reg_message)
-            })
+                # this is normal, it just means that the endpoint never reached Disconnected
+                # state before connecting again
+                logger.info(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list", extra={
+                    "log_type": "endpoint_reconnected",
+                    "endpoint_id": ep_id
+                })
+            else:
+                logger.info("endpoint_connected", {
+                    "log_type": "endpoint_connected",
+                    "endpoint_id": ep_id,
+                    "registration_message": pickle.loads(reg_message)
+                })
+                # Now subscribe to messages for ep_id
+                # if this endpoint is already in self.connected_endpoints, it is already subscribed
+                self.add_subscriber(ep_id)
 
             self.connected_endpoints[ep_id] = {'registration_message': reg_message,
                                                'missed_heartbeats': 0}
-
-            # Now subscribe to messages for ep_id
-            self.add_subscriber(ep_id)
         except zmq.Again:
             pass
         except Exception:
@@ -405,22 +409,22 @@ class Forwarder(Process):
         (Registered, Connected, Disconnected), and we will accept the results. This is because
         we do not tie the connection status of this queue to the state of the endpoint, as
         doing so could mean rejecting perfectly good results on a working ZMQ connection.
-        
+
         Registered =>
             Getting results in this state means this zmq pipe has opened and results are sent
             over before the connection message has been sent by the endpoint.
-        
+
         Connected =>
             Getting results in this state is normal, as a connection message has been sent
             and zmq pipes are working.
-        
+
         Disconnected =>
             Getting results in this state means the endpoint registered and was connected,
             but a zmq send failed over a different pipe, sending the endpoint do Disconnected
             state. The results pipe could still be working, or it could've started working
             again before the connection message is sent again
         '''
-        try: 
+        try:
             # timeout in ms, when 0 it's nonblocking
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
             endpoint_id = b_ep_id.decode('utf-8')
