@@ -61,38 +61,27 @@ class Forwarder(Process):
     - Connected: Endpoint has connected, meaning ZMQ messages can be sent and received
     - Disconnected: ZMQ message sending is failing for this endpoint, making it disconnected
 
+    * All endpoints and endpoint states are forgotten when a forwarder restarts
     * Endpoints always start in the Registered state. Before that, the forwarder does not know they exist
-    * Results can arrive on the forwarder from an endpoint when it is in any state. See the NOTE below at self.results_q.get
+    * Endpoints can send a registration message at any time while in Connected/Disconnected state and it will not impact the current state
+    * Results can arrive on the forwarder from an endpoint when it is in any state. See the NOTE below at handle_results
 
     Endpoint State Transitions
     --------------------------
     Registered -> Connected =>
-        Everything is working as expected (Endpoint is registered and ZMQ is working)
+        Everything is working as expected for first time connection on forwarder
+        (Endpoint is registered and ZMQ is working)
 
     Registered -> nothing =>
         Connectivity issue over the 5500* ports using ZMQ
 
-    Connected -> (Disconnected*) -> Registered =>
-        Forwarder down, endpoint re-registers. Alternatively, user stops an endpoint
-        and starts it quickly after, before it becomes Disconnected on its own. The
-        (Disconnected*) transition here indicates that the forwarder disconnects the
-        endpoint to remove any lingering connection data in memory before moving it
-        into the Registered state immediately after.
-
     Connected -> Disconnected =>
-        Endpoint down / connection down (Could be transient network issue where
-        endpoint is live with tasks/results)
-
-    Disconnected -> Registered =>
-        Endpoint re-registers on its own if the connection was down but the connection comes
-        back up again (The endpoint must detect this and re-register). Alternatively, user
-        manually restarts endpoint after it was Disconnected
+        ZMQ network issues or endpoint is down
 
     Disconnected -> Connected =>
-        Harmless transition which skips re-registration. Endpoints only really ever
-        need to register with a forwarder once (Being in Disconnected state implies the
-        endpoint was once in Registered state). This can only be achieved by modifying
-        the FuncX endpoint code.
+        Endpoint connection request received. This is either sent when a user manually
+        restarts a Disconnected endpoint, or when an endpoint recognizes it has lost
+        connection and automatically reconnects
     """
 
     def __init__(self,
@@ -227,12 +216,6 @@ class Forwarder(Process):
 
         Registering an existing endpoint_id is allowed
         """
-        logger.debug("Cleaning up any existing endpoint connection data", extra={
-            "log_type": "endpoint_registration_cleanup",
-            "endpoint_id": endpoint_id
-        })
-        self.disconnect_endpoint(endpoint_id)
-
         logger.info("endpoint_registered", extra={
             "log_type": "endpoint_registered",
             "endpoint_id": endpoint_id
@@ -282,13 +265,13 @@ class Forwarder(Process):
         TODO: This needs some extensive testing. It is unclear how well detecting failures
         will work on WAN networks with latencies.
         """
+        logger.info("endpoint_disconnected", extra={
+            "log_type": "endpoint_disconnected",
+            "endpoint_id": endpoint_id
+        })
+
         self.redis_pubsub.unsubscribe(endpoint_id)
-        old_endpoint = self.connected_endpoints.pop(endpoint_id, None)
-        if old_endpoint is not None:
-            logger.info("endpoint_disconnected", extra={
-                "log_type": "endpoint_disconnected",
-                "endpoint_id": endpoint_id
-            })
+        self.connected_endpoints.pop(endpoint_id, None)
 
     def add_endpoint_keys(self, ep_id, ep_key):
         """ To remove. this is not used.
@@ -331,18 +314,17 @@ class Forwarder(Process):
             b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
+
+            if ep_id in self.connected_endpoints:
+                # disconnect endpoint before allowing a reconnect
+                self.disconnect_endpoint(ep_id)
+
             logger.info("endpoint_connected", {
                 "log_type": "endpoint_connected",
                 "endpoint_id": ep_id,
                 "registration_message": pickle.loads(reg_message)
             })
 
-            if ep_id in self.connected_endpoints:
-                # This really shouldn't happen, could be a reconnect ?
-                logger.warning(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list", extra={
-                    "log_type": "endpoint_reconnect_warning",
-                    "endpoint_id": ep_id
-                })
             self.connected_endpoints[ep_id] = {'registration_message': reg_message,
                                                'missed_heartbeats': 0}
 
@@ -418,19 +400,30 @@ class Forwarder(Process):
 
     def handle_results(self):
         ''' Receive incoming results on results_q and update Redis with results
+
+        NOTE: Results can arrive on this queue when the endpoint is in any of the 3 states
+        (Registered, Connected, Disconnected), and we will accept the results. This is because
+        we do not tie the connection status of this queue to the state of the endpoint, as
+        doing so could mean rejecting perfectly good results on a working ZMQ connection.
+        
+        Registered =>
+            Getting results in this state means this zmq pipe has opened and results are sent
+            over before the connection message has been sent by the endpoint.
+        
+        Connected =>
+            Getting results in this state is normal, as a connection message has been sent
+            and zmq pipes are working.
+        
+        Disconnected =>
+            Getting results in this state means the endpoint registered and was connected,
+            but a zmq send failed over a different pipe, sending the endpoint do Disconnected
+            state. The results pipe could still be working, or it could've started working
+            again before the connection message is sent again
         '''
-        try:
+        try: 
             # timeout in ms, when 0 it's nonblocking
-            # NOTE: Results can arrive on this queue when the endpoint is in any of the 3 states
-            # (Registered, Connected, Disconnected), and we will accept the results. This is because
-            # we do not tie the connection status of this queue to the state of the endpoint, as
-            # doing so could mean rejecting perfectly good results on a working ZMQ connection.
             b_ep_id, b_message = self.results_q.get(block=False, timeout=0)
             endpoint_id = b_ep_id.decode('utf-8')
-
-            # TODO: If we get a result here can we transition endpoint in Disconnected/Registered
-            # state to Connected state? The drawback may be that the results_q could be working while
-            # sending over the tasks_q could be broken, being a different ZMQ queue.
 
             if b_message == b'HEARTBEAT':
                 logger.debug(f"Received heartbeat from {endpoint_id} over results channel", extra={
