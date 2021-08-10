@@ -511,23 +511,15 @@ class Forwarder(Process):
     def handle_results_ack(self, endpoint_id, task_id):
         if endpoint_id not in self.connected_endpoints:
             return
-        
-        connected_endpoint_data = self.connected_endpoints[endpoint_id]
-        connected_endpoint_data["unacked_results"] += 1
 
-        # TODO: change this condition
-        if True:
-            msg = ResultsAck(task_id=task_id)
-            try:
-                self.tasks_q.put(endpoint_id.encode('utf-8'),
-                                 msg.pack())
-            except (zmq.error.ZMQError, zmq.Again):
-                logger.exception(f"Endpoint:{endpoint_id} results ack send failed")
-                self.disconnect_endpoint(endpoint_id)
-            else:
-                # send an ack
-                connected_endpoint_data["unacked_results"] = 0
-                connected_endpoint_data["last_result_ack_time"] = time.time()
+        msg = ResultsAck(task_id=task_id)
+        try:
+            # send an ack
+            self.tasks_q.put(endpoint_id.encode('utf-8'),
+                                msg.pack())
+        except (zmq.error.ZMQError, zmq.Again):
+            logger.exception(f"Endpoint:{endpoint_id} results ack send failed")
+            self.disconnect_endpoint(endpoint_id)
 
     def run(self):
         """ Process entry point
