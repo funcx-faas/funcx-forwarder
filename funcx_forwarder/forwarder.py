@@ -474,6 +474,8 @@ class Forwarder(Process):
             prev_task_status = task.status
             if prev_task_status == TaskState.SUCCESS or prev_task_status == TaskState.FAILED:
                 logger.debug(f"Duplicate result received for task: {task.task_id}")
+                # resend results ack in case the previous ack was not received for this result
+                self.handle_results_ack(endpoint_id, task.task_id)
                 return
 
             if 'result' in message:
@@ -487,7 +489,6 @@ class Forwarder(Process):
 
             task_group_id = task.task_group_id
             if ('result' in message or 'exception' in message) and task_group_id:
-
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
                 channel.exchange_declare(exchange='tasks', exchange_type='direct')
@@ -513,6 +514,11 @@ class Forwarder(Process):
             return
 
         msg = ResultsAck(task_id=task_id)
+        logger.debug(f"Sending Result Ack to endpoint {endpoint_id} for task {task_id}: {msg}", extra={
+            "log_type": "results_ack",
+            "endpoint_id": endpoint_id,
+            "task_id": task_id
+        })
         try:
             # send an ack
             self.tasks_q.put(endpoint_id.encode('utf-8'),
