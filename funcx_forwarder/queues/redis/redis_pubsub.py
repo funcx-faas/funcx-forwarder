@@ -100,7 +100,8 @@ class RedisPubSub(object):
 
     def unsubscribe(self, endpoint_id):
         self.pubsub.unsubscribe(self.channel_name(endpoint_id))
-        self.subscriber_count -= 1
+        if self.subscriber_count > 0:
+            self.subscriber_count -= 1
 
     def get(self, timeout: int = 2) -> Tuple[str, Task]:
         """

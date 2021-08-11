@@ -61,12 +61,27 @@ class Forwarder(Process):
     - Connected: Endpoint has connected, meaning ZMQ messages can be sent and received
     - Disconnected: ZMQ message sending is failing for this endpoint, making it disconnected
 
+    * All endpoints and endpoint states are forgotten when a forwarder restarts
+    * Endpoints always start in the Registered state. Before that, the forwarder does not know they exist
+    * Endpoints can send a registration message at any time while in Connected/Disconnected state and it will not impact the current state
+    * Results can arrive on the forwarder from an endpoint when it is in any state. See the NOTE below at handle_results
+
     Endpoint State Transitions
     --------------------------
-    Registered -> Connected => Everything is working as expected (Endpoint is registered and ZMQ is working)
-    Registered -> nothing => Connectivity issue over the 5500* ports using ZMQ
-    Connected -> Registered => Forwarder down, endpoint re-registers
-    Connected -> Disconnected => Endpoint down / connection down (Could be transient network issue where endpoint is live with tasks/results)
+    Registered -> Connected =>
+        Everything is working as expected for first time connection on forwarder
+        (Endpoint is registered and ZMQ is working)
+
+    Registered -> nothing =>
+        Connectivity issue over the 5500* ports using ZMQ
+
+    Connected -> Disconnected =>
+        ZMQ network issues or endpoint is down
+
+    Disconnected -> Connected =>
+        Endpoint connection request received. This is either sent when a user manually
+        restarts a Disconnected endpoint, or when an endpoint recognizes it has lost
+        connection and automatically reconnects
     """
 
     def __init__(self,
@@ -123,7 +138,6 @@ class Forwarder(Process):
         self.kill_event = Event()
         self.heartbeat_period = heartbeat_period
         self._last_heartbeat = time.time()
-        self.endpoint_registry = {}
         self.keys_dir = keys_dir
         self.redis_pubsub = RedisPubSub(hostname=redis_address, port=redis_port)
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
@@ -207,8 +221,6 @@ class Forwarder(Process):
             "endpoint_id": endpoint_id
         })
 
-        self.endpoint_registry[endpoint_id] = {'creation_time': time.time(),
-                                               'client_public_key': key}
         self.update_endpoint_metadata(endpoint_id, endpoint_address)
 
         self.tasks_q.add_client_key(endpoint_id, key)
@@ -259,8 +271,6 @@ class Forwarder(Process):
         })
 
         self.redis_pubsub.unsubscribe(endpoint_id)
-        # TODO: YADU Combine the registry with connected_endpoints
-        self.endpoint_registry.pop(endpoint_id, None)
         self.connected_endpoints.pop(endpoint_id, None)
 
     def add_endpoint_keys(self, ep_id, ep_key):
@@ -304,20 +314,26 @@ class Forwarder(Process):
             b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
-            logger.info("endpoint_connected", {
-                "log_type": "endpoint_connected",
-                "endpoint_id": ep_id,
-                "registration_message": pickle.loads(reg_message)
-            })
 
             if ep_id in self.connected_endpoints:
-                # This really shouldn't happen, could be a reconnect ?
-                logger.warning(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list")
+                # this is normal, it just means that the endpoint never reached Disconnected
+                # state before connecting again
+                logger.info(f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list", extra={
+                    "log_type": "endpoint_reconnected",
+                    "endpoint_id": ep_id
+                })
+            else:
+                logger.info("endpoint_connected", {
+                    "log_type": "endpoint_connected",
+                    "endpoint_id": ep_id,
+                    "registration_message": pickle.loads(reg_message)
+                })
+                # Now subscribe to messages for ep_id
+                # if this endpoint is already in self.connected_endpoints, it is already subscribed
+                self.add_subscriber(ep_id)
+
             self.connected_endpoints[ep_id] = {'registration_message': reg_message,
                                                'missed_heartbeats': 0}
-
-            # Now subscribe to messages for ep_id
-            self.add_subscriber(ep_id)
         except zmq.Again:
             pass
         except Exception:
@@ -345,17 +361,25 @@ class Forwarder(Process):
         task = None
         try:
             dest_endpoint, task = self.redis_pubsub.get(timeout=0)
-            logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}")
+            logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}", extra={
+                "log_type": "forwarder_redis_task_get",
+                "endpoint_id": dest_endpoint
+            })
         except queue.Empty:
             return 0
         except Exception:
             logger.exception("Caught exception waiting for message from REDIS")
             return 0
 
-        if dest_endpoint not in self.endpoint_registry:
+        if dest_endpoint not in self.connected_endpoints:
             # At this point we should be unsubscribed and receiving only messages
             # from the TCP buffers.
+            logger.warning(f"Putting back REDIS message for unconnected endpoint: {dest_endpoint}:{task}", extra={
+                "log_type": "forwarder_redis_task_put",
+                "endpoint_id": dest_endpoint
+            })
             self.redis_pubsub.put(dest_endpoint, task)
+            self.redis_pubsub.unsubscribe(dest_endpoint)
         else:
             try:
                 logger.info(f"Sending task:{task.task_id} to endpoint:{dest_endpoint}")
@@ -366,9 +390,13 @@ class Forwarder(Process):
                                  zmq_task.pack())
             except (zmq.error.ZMQError, zmq.Again):
                 logger.exception(f"Endpoint:{dest_endpoint} is unreachable")
+                # put task back in redis since it was not sent to endpoint
+                self.redis_pubsub.put(dest_endpoint, task)
                 self.disconnect_endpoint(dest_endpoint)
             except Exception:
                 logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
+                # put task back in redis since it was not sent to endpoint
+                self.redis_pubsub.put(dest_endpoint, task)
                 pass
             else:
                 self.log_task_transition(task, 'dispatched_to_endpoint')
@@ -376,6 +404,25 @@ class Forwarder(Process):
 
     def handle_results(self):
         ''' Receive incoming results on results_q and update Redis with results
+
+        NOTE: Results can arrive on this queue when the endpoint is in any of the 3 states
+        (Registered, Connected, Disconnected), and we will accept the results. This is because
+        we do not tie the connection status of this queue to the state of the endpoint, as
+        doing so could mean rejecting perfectly good results on a working ZMQ connection.
+
+        Registered =>
+            Getting results in this state means this zmq pipe has opened and results are sent
+            over before the connection message has been sent by the endpoint.
+
+        Connected =>
+            Getting results in this state is normal, as a connection message has been sent
+            and zmq pipes are working.
+
+        Disconnected =>
+            Getting results in this state means the endpoint registered and was connected,
+            but a zmq send failed over a different pipe, sending the endpoint do Disconnected
+            state. The results pipe could still be working, or it could've started working
+            again before the connection message is sent again
         '''
         try:
             # timeout in ms, when 0 it's nonblocking
