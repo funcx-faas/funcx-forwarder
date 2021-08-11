@@ -256,7 +256,7 @@ def cli_run():
     finally:
         logger.debug("Graceful exit")
         app.config['forwarder_command'].put({'command': 'TERMINATE'})
-        fw.stop()
+        fw.terminate()
 
 
 if __name__ == '__main__':
