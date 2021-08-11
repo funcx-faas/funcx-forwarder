@@ -522,7 +522,7 @@ class Forwarder(Process):
         try:
             # send an ack
             self.tasks_q.put(endpoint_id.encode('utf-8'),
-                                msg.pack())
+                             msg.pack())
         except (zmq.error.ZMQError, zmq.Again):
             logger.exception(f"Endpoint:{endpoint_id} results ack send failed")
             self.disconnect_endpoint(endpoint_id)
