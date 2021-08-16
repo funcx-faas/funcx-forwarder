@@ -182,6 +182,16 @@ def cli_run():
                         help="Enables debug logging")
     parser.add_argument("-v", "--version", action='store_true',
                         help="Print version information")
+    parser.add_argument(
+        "--endpoint-base-port",
+        default=50001,
+        type=int,
+        help=(
+            "The base port for zmq channels.  The forwarder "
+            "will reserve three port numbers starting at this "
+            "port number and the next two higher."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -214,7 +224,7 @@ def cli_run():
                    args.address,
                    args.redishost,
                    rabbitmq_conn_params,
-                   # endpoint_ports=(55008, 55009, 55010),   # Only for debug
+                   endpoint_ports=range(args.endpoint_base_port, args.endpoint_base_port + 3),
                    logging_level=logging_level,
                    redis_port=args.redisport)
     fw.start()
