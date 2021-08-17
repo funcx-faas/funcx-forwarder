@@ -13,7 +13,7 @@ from funcx_forwarder.taskqueue import TaskQueue
 from funcx_forwarder.queues.redis.redis_pubsub import RedisPubSub
 from funcx_forwarder.endpoint_db import EndpointDB
 
-from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport
+from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport, ResultsAck
 
 from funcx_forwarder.queues.redis.tasks import Task as RedisTask
 from funcx_forwarder.queues.redis.tasks import TaskState, status_code_convert
@@ -259,19 +259,24 @@ class Forwarder(Process):
         return
 
     def disconnect_endpoint(self, endpoint_id):
-        """ Unsubscribes from Redis pubsub and "removes" endpoint from the tasks channel
+        """ Unsubscribes from Redis pubsub and "removes" endpoint from the tasks channel.
+        This method does nothing if the endpoint is already disconnected.
 
-        Triggered by either heartbeats or tasks not getting delivered
+        Triggered by zmq messages not getting delivered (heartbeats, tasks, result acks)
         TODO: This needs some extensive testing. It is unclear how well detecting failures
         will work on WAN networks with latencies.
         """
+        disconnected_endpoint = self.connected_endpoints.pop(endpoint_id, None)
+        # if the endpoint is already disconnected, simply return
+        if not disconnected_endpoint:
+            return
+
         logger.info("endpoint_disconnected", extra={
             "log_type": "endpoint_disconnected",
             "endpoint_id": endpoint_id
         })
 
         self.redis_pubsub.unsubscribe(endpoint_id)
-        self.connected_endpoints.pop(endpoint_id, None)
 
     def add_endpoint_keys(self, ep_id, ep_key):
         """ To remove. this is not used.
@@ -470,6 +475,14 @@ class Forwarder(Process):
             task = RedisTask.from_id(self.redis_pubsub.redis_client, message['task_id'])
             logger.debug(f"Task info : {task}")
 
+            # handle if we get duplicate task ids
+            prev_task_status = task.status
+            if prev_task_status == TaskState.SUCCESS or prev_task_status == TaskState.FAILED:
+                logger.debug(f"Duplicate result received for task: {task.task_id}")
+                # resend results ack in case the previous ack was not received for this result
+                self.handle_results_ack(endpoint_id, task.task_id)
+                return
+
             if 'result' in message:
                 task.status = TaskState.SUCCESS
                 task.result = message['result']
@@ -481,7 +494,6 @@ class Forwarder(Process):
 
             task_group_id = task.task_group_id
             if ('result' in message or 'exception' in message) and task_group_id:
-
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
                 channel.exchange_declare(exchange='tasks', exchange_type='direct')
@@ -494,10 +506,35 @@ class Forwarder(Process):
 
                 self.log_task_transition(task, 'result_enqueued')
 
+            if 'result' in message or 'exception' in message:
+                self.handle_results_ack(endpoint_id, task.task_id)
+
         except zmq.Again:
             pass
         except Exception:
             logger.exception("Caught exception from results queue")
+
+    def handle_results_ack(self, endpoint_id, task_id):
+        if endpoint_id not in self.connected_endpoints:
+            logger.warning(f"Attempting to send results Ack to disconnected endpoint: {endpoint_id}", extra={
+                "log_type": "disconnected_ack_attempt",
+                "endpoint_id": endpoint_id,
+                "task_id": task_id
+            })
+
+        msg = ResultsAck(task_id=task_id)
+        logger.debug(f"Sending Result Ack to endpoint {endpoint_id} for task {task_id}: {msg}", extra={
+            "log_type": "results_ack",
+            "endpoint_id": endpoint_id,
+            "task_id": task_id
+        })
+        try:
+            # send an ack
+            self.tasks_q.put(endpoint_id.encode('utf-8'),
+                             msg.pack())
+        except (zmq.error.ZMQError, zmq.Again):
+            logger.exception(f"Endpoint:{endpoint_id} results ack send failed")
+            self.disconnect_endpoint(endpoint_id)
 
     def run(self):
         """ Process entry point
