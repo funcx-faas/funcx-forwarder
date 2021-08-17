@@ -176,8 +176,8 @@ def cli_run():
                         help="Redis host address")
     parser.add_argument("--redisport", default=6379,
                         help="Redis port")
-    parser.add_argument("--rabbitmqhost", required=True,
-                        help="RabbitMQ host address")
+    parser.add_argument("--rabbitmquri", required=True,
+                        help="RabbitMQ connection uri")
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
     parser.add_argument("-v", "--version", action='store_true',
@@ -202,8 +202,7 @@ def cli_run():
         decode_responses=True
     )
 
-    rabbitmq_credentials = pika.PlainCredentials('funcx', 'rabbitmq')
-    rabbitmq_conn_params = pika.ConnectionParameters(args.rabbitmqhost, 5672, '/', rabbitmq_credentials)
+    rabbitmq_conn_params = pika.URLParameters(args.rabbitmquri)
     app.config['rabbitmq_conn_params'] = rabbitmq_conn_params
 
     app.config['forwarder_command'] = Queue()
