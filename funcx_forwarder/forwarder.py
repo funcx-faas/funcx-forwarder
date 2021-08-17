@@ -259,19 +259,24 @@ class Forwarder(Process):
         return
 
     def disconnect_endpoint(self, endpoint_id):
-        """ Unsubscribes from Redis pubsub and "removes" endpoint from the tasks channel
+        """ Unsubscribes from Redis pubsub and "removes" endpoint from the tasks channel.
+        This method does nothing if the endpoint is already disconnected.
 
-        Triggered by either heartbeats or tasks not getting delivered
+        Triggered by zmq messages not getting delivered (heartbeats, tasks, result acks)
         TODO: This needs some extensive testing. It is unclear how well detecting failures
         will work on WAN networks with latencies.
         """
+        disconnected_endpoint = self.connected_endpoints.pop(endpoint_id, None)
+        # if the endpoint is already disconnected, simply return
+        if not disconnected_endpoint:
+            return
+
         logger.info("endpoint_disconnected", extra={
             "log_type": "endpoint_disconnected",
             "endpoint_id": endpoint_id
         })
 
         self.redis_pubsub.unsubscribe(endpoint_id)
-        self.connected_endpoints.pop(endpoint_id, None)
 
     def add_endpoint_keys(self, ep_id, ep_key):
         """ To remove. this is not used.
@@ -511,7 +516,11 @@ class Forwarder(Process):
 
     def handle_results_ack(self, endpoint_id, task_id):
         if endpoint_id not in self.connected_endpoints:
-            return
+            logger.warning(f"Attempting to send results Ack to disconnected endpoint: {endpoint_id}", extra={
+                "log_type": "disconnected_ack_attempt",
+                "endpoint_id": endpoint_id,
+                "task_id": task_id
+            })
 
         msg = ResultsAck(task_id=task_id)
         logger.debug(f"Sending Result Ack to endpoint {endpoint_id} for task {task_id}: {msg}", extra={
