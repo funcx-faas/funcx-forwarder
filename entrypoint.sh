@@ -9,8 +9,8 @@ if [[ -z "${REDIS_HOST}" ]]; then
     REDIS_HOST="$FUNCX_REDIS_MASTER_SERVICE_HOST"
 fi
 
-if [[ -z "${RABBITMQ_HOST}" ]]; then
-    RABBITMQ_HOST="$FUNCX_RABBITMQ_SERVICE_HOST"
+if [[ -z "${RABBITMQ_URI}" ]]; then
+    RABBITMQ_URI="amqp://funcx:rabbitmq@${FUNCX_RABBITMQ_SERVICE_HOST}/"
 fi
 
 if [[ -z "${ENDPOINT_BASE_PORT}" ]]; then
@@ -25,5 +25,5 @@ if [[ -z "${ADVERTISED_FORWARDER_ADDRESS}" ]]; then
     ADVERTISED_FORWARDER_ADDRESS=`wget http://169.254.169.254/latest/meta-data/public-ipv4; cat public-ipv4`
 fi
 
-forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmqhost $RABBITMQ_HOST -d --endpoint-base-port ${ENDPOINT_BASE_PORT}
 
+forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmquri $RABBITMQ_URI -d --endpoint-base-port ${ENDPOINT_BASE_PORT}
