@@ -89,7 +89,7 @@ class Forwarder(Process):
                  response_queue,
                  address: str,
                  redis_address: str,
-                 rabbitmq_conn_params: str,
+                 rabbitmq_conn_params,
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
                  logging_level=logging.INFO,
