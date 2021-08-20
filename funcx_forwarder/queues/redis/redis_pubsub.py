@@ -1,10 +1,12 @@
-import redis
-from redis.exceptions import ConnectionError
 import queue
 from typing import Tuple
 from funcx_forwarder.errors import FuncxError
 from funcx_forwarder.queues.redis.tasks import Task, InternalTaskState, TaskState
 import logging
+
+import redis
+
+from funcx_forwarder.queues.redis.tasks import RedisTask
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ class RedisPubSub(object):
         try:
             self.redis_client = redis.StrictRedis(host=self.hostname, port=self.port, decode_responses=True)
             self.redis_client.ping()
-        except ConnectionError:
+        except redis.exceptions.ConnectionError:
             logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(
                 self.hostname,
                 self.port))
@@ -67,7 +69,7 @@ class RedisPubSub(object):
             raise Exception("Not connected")
             raise NotConnected(self)
 
-        except ConnectionError:
+        except redis.exceptions.ConnectionError:
             logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(
                 self.hostname,
                 self.port))
@@ -123,7 +125,7 @@ class RedisPubSub(object):
             # Strip channel prefix
             dest_endpoint = package['channel'][self._task_channel_prefix_len:]
             task_id = package['data']
-            task = Task.from_id(self.redis_client, task_id)
+            task = RedisTask(self.redis_client, task_id)
 
         except queue.Empty:
             raise
