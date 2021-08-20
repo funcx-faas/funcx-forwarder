@@ -43,6 +43,8 @@ jobs:
         REDIS_HOST: redis  # this is the hostname for the service container
 
   publish:
+    # only trigger on pushes to the main repo (not forks, and not PRs)
+    if: ${{ github.repository == 'funcx-faas/funcx-forwarder' && github.event_name == 'push' }}
     needs: test
     runs-on: ubuntu-latest
     steps:
