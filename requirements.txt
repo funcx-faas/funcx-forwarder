@@ -5,6 +5,7 @@ parsl>=1.1.0a0
 configobj==5.0.6
 texttable==1.6.2
 redis==3.5.3
+funcx-common[redis]==0.0.4
 funcx @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx&subdirectory=funcx_sdk
 funcx-endpoint @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx-endpoint&subdirectory=funcx_endpoint
 pyzmq==22.0.3

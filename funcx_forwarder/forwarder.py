@@ -9,14 +9,16 @@ import funcx_forwarder
 
 
 from multiprocessing import Process, Queue, Event
+from funcx_common.tasks import TaskState
+
 from funcx_forwarder.taskqueue import TaskQueue
 from funcx_forwarder.queues.redis.redis_pubsub import RedisPubSub
 from funcx_forwarder.endpoint_db import EndpointDB
 
 from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport, ResultsAck
 
-from funcx_forwarder.queues.redis.tasks import Task as RedisTask
-from funcx_forwarder.queues.redis.tasks import TaskState, status_code_convert
+from funcx_forwarder.queues.redis.tasks import RedisTask, status_code_convert
+
 import time
 import pickle
 import pika
