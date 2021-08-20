@@ -4,7 +4,6 @@ import uuid
 import time
 import logging
 
-# from forwarder.queues.base import FuncxQueue, NotConnected
 import json
 
 from funcx_endpoint.queues.base import NotConnected
