@@ -106,3 +106,30 @@ Once it's running, you can hit the forwarder's endpoints:
 .. code-block:: bash
 
     curl http://localhost:8080/version
+
+
+Running Tests
+=============
+
+Tests require a local redis instance to be up and running.
+
+With that in place, install the dev requirements:
+
+.. code-block:: bash
+
+    pip install '.[dev]'
+
+And run pytest:
+
+.. code-block:: bash
+
+    pytest
+
+Local Redis in Docker
+---------------------
+
+The easiest way to get a local redis instance is to run a docker container:
+
+.. code-block:: bash
+
+    docker run -d -p 6379:6379 --name funcx-forwarder-test-redis redis
