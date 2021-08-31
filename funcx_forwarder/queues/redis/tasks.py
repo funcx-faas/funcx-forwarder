@@ -16,6 +16,7 @@ class TaskState(str, Enum):
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
+    PARTIAL = "partial"  # in the process of being sent over RabbitMQ and saved to redis (intermediate state)
 
 
 def status_code_convert(code):

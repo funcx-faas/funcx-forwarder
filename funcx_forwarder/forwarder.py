@@ -483,15 +483,20 @@ class Forwarder(Process):
                 self.handle_results_ack(endpoint_id, task.task_id)
                 return
 
+            task.status = TaskState.PARTIAL
+
+            status = None
+
             if 'result' in message:
-                task.status = TaskState.SUCCESS
+                status = TaskState.SUCCESS
                 task.result = message['result']
                 task.completion_time = time.time()
             elif 'exception' in message:
-                task.status = TaskState.FAILED
+                status = TaskState.FAILED
                 task.exception = message['exception']
                 task.completion_time = time.time()
 
+            # TODO: ensure that it is fine for a task_id to be put in RabbitMQ twice
             task_group_id = task.task_group_id
             if ('result' in message or 'exception' in message) and task_group_id:
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
@@ -506,7 +511,10 @@ class Forwarder(Process):
 
                 self.log_task_transition(task, 'result_enqueued')
 
-            if 'result' in message or 'exception' in message:
+            if status is not None:
+                # if an exception occurs here while setting the final state on redis,
+                # the task will still be in PARTIAL state
+                task.status = status
                 self.handle_results_ack(endpoint_id, task.task_id)
 
         except zmq.Again:
