@@ -63,7 +63,7 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
         tag: "${GITHUB_REF##*/}"
 
-#  If this is a merge to main branch then we want to restart the web service
+#  If this is a merge to main branch then we want to restart the forwarder
 #  pod on dev cluster to pick up the changes
   deploy:
     needs: publish
@@ -77,14 +77,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: scale to webservice pods to zero
+      - name: scale to forwarder pods to zero
         uses: kodermax/kubectl-aws-eks@master
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_STAGING }}
         with:
           args:  scale deployment funcx-forwarder --replicas=0
 
-      - name: scale to webservice pods back up
+      - name: scale to forwarder pods back up
         uses: kodermax/kubectl-aws-eks@master
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_STAGING }}
