@@ -26,9 +26,9 @@ Response payload::
 
   {
      'endpoint_id': endpoint_id,
-     'task_url': 'tcp://55.77.66.22:50001',
-     'result_url': 'tcp://55.77.66.22:50002',
-     'command_port': 'tcp://55.77.66.22:50003'
+     'task_url': 'tcp://55.77.66.22:55001',
+     'result_url': 'tcp://55.77.66.22:55002',
+     'command_port': 'tcp://55.77.66.22:55003'
   }
 
 /list_endpoints

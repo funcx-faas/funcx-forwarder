@@ -184,7 +184,7 @@ def cli_run():
                         help="Print version information")
     parser.add_argument(
         "--endpoint-base-port",
-        default=50001,
+        default=55001,
         type=int,
         help=(
             "The base port for zmq channels.  The forwarder "
