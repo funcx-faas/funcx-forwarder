@@ -14,7 +14,7 @@ if [[ -z "${RABBITMQ_URI}" ]]; then
 fi
 
 if [[ -z "${ENDPOINT_BASE_PORT}" ]]; then
-    ENDPOINT_BASE_PORT=50001
+    ENDPOINT_BASE_PORT=55001
 fi
 
 python3 wait_for_redis.py
