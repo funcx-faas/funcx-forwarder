@@ -16,7 +16,7 @@ from funcx_forwarder.endpoint_db import EndpointDB
 from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport, ResultsAck
 
 from funcx_forwarder.queues.redis.tasks import Task as RedisTask
-from funcx_forwarder.queues.redis.tasks import TaskState, status_code_convert
+from funcx_forwarder.queues.redis.tasks import TaskState, InternalTaskState, status_code_convert
 import time
 import pickle
 import pika
@@ -472,17 +472,41 @@ class Forwarder(Process):
                 logger.debug(f"Registration message from {message['registration']}")
                 return
 
-            task = RedisTask.from_id(self.redis_pubsub.redis_client, message['task_id'])
-            logger.debug(f"Task info : {task}")
-
-            # handle if we get duplicate task ids
-            prev_task_status = task.status
-            if prev_task_status == TaskState.SUCCESS or prev_task_status == TaskState.FAILED:
-                logger.debug(f"Duplicate result received for task: {task.task_id}")
-                # resend results ack in case the previous ack was not received for this result
-                self.handle_results_ack(endpoint_id, task.task_id)
+            # only messages with a result or an exception are processed past this point
+            result_or_exception = 'result' in message or 'exception' in message
+            if not result_or_exception:
+                logger.warning("A task result message was received without a result or an exception", extra={
+                    "endpoint_id": endpoint_id,
+                    "endpoint_status_message": message.__dict__
+                })
                 return
 
+            rc = self.redis_pubsub.redis_client
+            task_id = message['task_id']
+
+            if not RedisTask.exists(rc, task_id):
+                logger.warning(f"Got result for task that does not exist in redis: {task_id}")
+                # if the task does not exist in redis, it may mean it was retrieved by
+                # the user and deleted from redis before it could be acked so the
+                # endpoint sent another result message. This means we should ack this
+                # task_id to prevent the endpoint from continuing to send it
+                self.handle_results_ack(endpoint_id, task_id)
+                return
+
+            task = RedisTask.from_id(rc, task_id)
+            logger.debug(f"Task info : {task}")
+
+            # handle if we get duplicate task ids (if one of the critical sections
+            # below did not succeed, the task could never reach an internal state
+            # of COMPLETE, meaning we will retry that section)
+            if task.internal_status == InternalTaskState.COMPLETE:
+                logger.debug(f"Duplicate result received for task: {task_id}")
+                # resend results ack in case the previous ack was not received for this result
+                self.handle_results_ack(endpoint_id, task_id)
+                return
+
+            # this critical section is where the final task redis data is set,
+            # and the task result will not be acked if this fails
             if 'result' in message:
                 task.status = TaskState.SUCCESS
                 task.result = message['result']
@@ -492,22 +516,30 @@ class Forwarder(Process):
                 task.exception = message['exception']
                 task.completion_time = time.time()
 
+            # this critical section is where the task ID is sent over RabbitMQ,
+            # and the task result will not be acked if this fails
             task_group_id = task.task_group_id
-            if ('result' in message or 'exception' in message) and task_group_id:
+            if task_group_id:
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
                 channel.exchange_declare(exchange='tasks', exchange_type='direct')
                 channel.queue_declare(queue=task_group_id)
                 channel.queue_bind(task_group_id, 'tasks')
 
-                channel.basic_publish(exchange='tasks', routing_key=task_group_id, body=task.task_id)
-                logger.debug(f"Publishing to RabbitMQ routing key {task_group_id} : {task.task_id}")
+                # important: the FuncX client must be capable of receiving the same
+                # task_id multiple times, in case this bit succeeds but code below this
+                # fails and this must be retried
+                channel.basic_publish(exchange='tasks', routing_key=task_group_id, body=task_id)
+                logger.debug(f"Publishing to RabbitMQ routing key {task_group_id} : {task_id}")
                 connection.close()
 
                 self.log_task_transition(task, 'result_enqueued')
 
-            if 'result' in message or 'exception' in message:
-                self.handle_results_ack(endpoint_id, task.task_id)
+            # internally, the task is only considered complete when both critical
+            # sections above have succeeded (redis data is sent and the task_id is
+            # sent over RabbitMQ)
+            task.internal_status = InternalTaskState.COMPLETE
+            self.handle_results_ack(endpoint_id, task_id)
 
         except zmq.Again:
             pass
