@@ -555,6 +555,7 @@ class Forwarder(Process):
                 "task_id": task_id
             })
 
+        # TODO: remove once endpoint version 0.3.* is deprecated
         reg_message = self.connected_endpoints[endpoint_id]['registration_message']
         # if the key funcx_endpoint_version is in the registration message, it means
         # the endpoint version is >=0.3.3, because 0.3.3 is the first endpoint version
