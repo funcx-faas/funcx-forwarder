@@ -316,9 +316,10 @@ class Forwarder(Process):
         are sent from the interchange -> forwarder on the task_q
         '''
         try:
-            b_ep_id, reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
+            b_ep_id, b_reg_message = self.tasks_q.get(timeout=0)  # timeout in ms # Update to 0ms
             # At this point ep_id is authenticated by means having the client keys.
             ep_id = b_ep_id.decode('utf-8')
+            reg_message = pickle.loads(b_reg_message)
 
             if ep_id in self.connected_endpoints:
                 # this is normal, it just means that the endpoint never reached Disconnected
@@ -328,10 +329,10 @@ class Forwarder(Process):
                     "endpoint_id": ep_id
                 })
             else:
-                logger.info("endpoint_connected", {
+                logger.info("endpoint_connected", extra={
                     "log_type": "endpoint_connected",
                     "endpoint_id": ep_id,
-                    "registration_message": pickle.loads(reg_message)
+                    "registration_message": reg_message
                 })
                 # Now subscribe to messages for ep_id
                 # if this endpoint is already in self.connected_endpoints, it is already subscribed
@@ -553,6 +554,14 @@ class Forwarder(Process):
                 "endpoint_id": endpoint_id,
                 "task_id": task_id
             })
+
+        reg_message = self.connected_endpoints[endpoint_id]['registration_message']
+        # if the key funcx_endpoint_version is in the registration message, it means
+        # the endpoint version is >=0.3.3, because 0.3.3 is the first endpoint version
+        # where we started sending the funcx_endpoint_version key to the forwarder
+        if "funcx_endpoint_version" not in reg_message:
+            logger.debug(f"Ack not sent to endpoint {endpoint_id} for backwards compatability because it has version <0.3.3")
+            return
 
         msg = ResultsAck(task_id=task_id)
         logger.debug(f"Sending Result Ack to endpoint {endpoint_id} for task {task_id}: {msg}", extra={
