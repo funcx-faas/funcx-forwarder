@@ -399,7 +399,7 @@ class Forwarder(Process):
                 self.redis_pubsub.put(dest_endpoint, task)
                 self.disconnect_endpoint(dest_endpoint)
             except Exception:
-                logger.exception("Caught error while sending {task.task_id} to {dest_endpoint}")
+                logger.exception(f"Caught error while sending {task.task_id} to {dest_endpoint}")
                 # put task back in redis since it was not sent to endpoint
                 self.redis_pubsub.put(dest_endpoint, task)
                 pass
