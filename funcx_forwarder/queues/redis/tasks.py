@@ -18,6 +18,13 @@ class TaskState(str, Enum):
     FAILED = "failed"
 
 
+# This internal state is never shown to the user and is meant to track whether
+# or not the forwarder has succeeded in fully processing the task
+class InternalTaskState(str, Enum):
+    INCOMPLETE = "incomplete"
+    COMPLETE = "complete"
+
+
 def status_code_convert(code):
     return {
         TaskStatusCode.WAITING_FOR_NODES: TaskState.WAITING_FOR_NODES,
@@ -75,6 +82,7 @@ class Task:
     ORM-esque class to wrap access to properties of tasks for better style and encapsulation
     """
     status = RedisField(serializer=lambda ts: ts.value, deserializer=TaskState)
+    internal_status = RedisField(serializer=lambda ts: ts.value, deserializer=InternalTaskState)
     user_id = RedisField(serializer=str, deserializer=int)
     function_id = RedisField()
     endpoint = RedisField()

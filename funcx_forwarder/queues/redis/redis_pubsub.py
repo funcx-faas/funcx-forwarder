@@ -3,7 +3,7 @@ from redis.exceptions import ConnectionError
 import queue
 from typing import Tuple
 from funcx_forwarder.errors import FuncxError
-from funcx_forwarder.queues.redis.tasks import Task, TaskState
+from funcx_forwarder.queues.redis.tasks import Task, InternalTaskState, TaskState
 import logging
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ class RedisPubSub(object):
         try:
             task.endpoint = endpoint_id
             task.status = TaskState.WAITING_FOR_EP
+            task.internal_status = InternalTaskState.INCOMPLETE
             # Note: Task object is already in Redis
             subscribers = self.redis_client.publish(self.channel_name(endpoint_id), task.task_id)
             if subscribers == 0:
