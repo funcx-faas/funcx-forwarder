@@ -393,10 +393,17 @@ class Forwarder(Process):
             self.redis_pubsub.unsubscribe(dest_endpoint)
         else:
             try:
-                logger.info(f"Sending task:{task.task_id} to endpoint:{dest_endpoint}")
-                zmq_task = Task(task.task_id,
+                task_id = task.task_id
+                logger.info(f"Sending task:{task_id} to endpoint:{dest_endpoint}")
+                zmq_task = Task(task_id,
                                 task.container,
                                 task.payload)
+            except Exception:
+                logger.exception(f"[CRITICAL] Unable to access task {task_id} from redis")
+                # TODO: log that task transitioned to lost
+                return 0
+
+            try:
                 self.tasks_q.put(dest_endpoint.encode('utf-8'),
                                  zmq_task.pack())
             except (zmq.error.ZMQError, zmq.Again):
@@ -405,10 +412,9 @@ class Forwarder(Process):
                 self.redis_pubsub.put(dest_endpoint, task)
                 self.disconnect_endpoint(dest_endpoint)
             except Exception:
-                logger.exception(f"Caught error while sending {task.task_id} to {dest_endpoint}")
+                logger.exception(f"Caught error while sending {task_id} to {dest_endpoint}")
                 # put task back in redis since it was not sent to endpoint
                 self.redis_pubsub.put(dest_endpoint, task)
-                pass
             else:
                 self.log_task_transition(task, 'dispatched_to_endpoint')
         return 1
