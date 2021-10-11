@@ -500,10 +500,17 @@ class Forwarder(Process):
             # handle if we get duplicate task ids (if one of the critical sections
             # below did not succeed, the task could never reach an internal state
             # of COMPLETE, meaning we will retry that section)
-            if task.internal_status == InternalTaskState.COMPLETE:
-                logger.debug(f"Duplicate result received for task: {task_id}")
-                # resend results ack in case the previous ack was not received for this result
+            try:
+                if task.internal_status == InternalTaskState.COMPLETE:
+                    logger.debug(f"Duplicate result received for task: {task_id}")
+                    # resend results ack in case the previous ack was not received for this result
+                    self.handle_results_ack(endpoint_id, task_id)
+                    return
+            except ValueError:
+                # A ValueError is raised if the task was wiped from REDIS by a client-fetch
+                # We should ack the endpoint so that it can wipe it's local cache
                 self.handle_results_ack(endpoint_id, task_id)
+                logger.warning(f"ACK requested for task:{task_id} which was already fetched by client.")
                 return
 
             # this critical section is where the final task redis data is set,
