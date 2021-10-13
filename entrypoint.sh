@@ -18,9 +18,9 @@ if [[ -z "${ENDPOINT_BASE_PORT}" ]]; then
 fi
 
 if [[ -z "${RESULT_TTL_SECONDS}" ]]; then
-    RESULT_TTL_OPT="--result_ttl $RESULT_TTL_SECONDS"
-else
     RESULT_TTL_OPT=""
+else
+    RESULT_TTL_OPT="--result_ttl $RESULT_TTL_SECONDS"
 fi
 
 python3 wait_for_redis.py
