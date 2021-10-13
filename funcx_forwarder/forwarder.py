@@ -528,7 +528,7 @@ class Forwarder(Process):
                 task.status = TaskState.FAILED
                 task.exception = message['exception']
                 task.completion_time = time.time()
-            task._set_expire(self.result_ttl)
+            task.set_expire(self.result_ttl)
 
             # this critical section is where the task ID is sent over RabbitMQ,
             # and the task result will not be acked if this fails
