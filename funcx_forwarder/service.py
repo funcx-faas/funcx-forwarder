@@ -180,6 +180,8 @@ def cli_run():
                         help="RabbitMQ connection uri")
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
+    parser.add_argument("--result_ttl", default=3600,
+                        help="Set task TTL in REDIS after the result is available.")
     parser.add_argument("-v", "--version", action='store_true',
                         help="Print version information")
     parser.add_argument(
@@ -225,6 +227,7 @@ def cli_run():
                    rabbitmq_conn_params,
                    endpoint_ports=range(args.endpoint_base_port, args.endpoint_base_port + 3),
                    logging_level=logging_level,
+                   result_ttl=int(args.result_ttl),
                    redis_port=args.redisport)
     fw.start()
     app.config['forwarder_process'] = fw

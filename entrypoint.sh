@@ -17,6 +17,12 @@ if [[ -z "${ENDPOINT_BASE_PORT}" ]]; then
     ENDPOINT_BASE_PORT=55001
 fi
 
+if [[ -z "${RESULT_TTL_SECONDS}" ]]; then
+    RESULT_TTL_OPT="--result_ttl $RESULT_TTL_SECONDS"
+else
+    RESULT_TTL_OPT=""
+fi
+
 python3 wait_for_redis.py
 
 if [[ -z "${ADVERTISED_FORWARDER_ADDRESS}" ]]; then
@@ -26,4 +32,4 @@ if [[ -z "${ADVERTISED_FORWARDER_ADDRESS}" ]]; then
 fi
 
 
-forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmquri $RABBITMQ_URI -d --endpoint-base-port ${ENDPOINT_BASE_PORT}
+forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmquri $RABBITMQ_URI -d --endpoint-base-port ${ENDPOINT_BASE_PORT} $RESULT_TTL_OPT

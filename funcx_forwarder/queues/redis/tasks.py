@@ -158,18 +158,18 @@ class Task:
             self.task_group_id = task_group_id
 
         self.header = self._generate_header()
-        self._set_expire()
+        self.set_expire(Task.TASK_TTL)
 
     @staticmethod
     def _generate_hname(task_id):
         return f'task_{task_id}'
 
-    def _set_expire(self):
-        """Expires task after TASK_TTL, if not already set."""
+    def set_expire(self, expiration):
+        """Expires task after expiration(seconds)"""
         ttl = self.rc.ttl(self.hname)
         if ttl < 0:
             # expire was not already set
-            self.rc.expire(self.hname, Task.TASK_TTL)
+            self.rc.expire(self.hname, expiration)
 
     def _generate_header(self):
         """Used to pass bits of information to EP"""
