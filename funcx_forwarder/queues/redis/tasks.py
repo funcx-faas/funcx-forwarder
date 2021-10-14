@@ -96,7 +96,7 @@ class Task:
     # must keep ttl and _set_expire in merge
     # tasks expire in 1 week, we are giving some grace period for
     # long-lived clients, and we'll revise this if there are complaints
-    TASK_TTL = timedelta(weeks=2)
+    TASK_TTL = timedelta(weeks=2).total_seconds()
 
     def __init__(
         self,
@@ -164,12 +164,17 @@ class Task:
     def _generate_hname(task_id):
         return f'task_{task_id}'
 
-    def set_expire(self, expiration):
-        """Expires task after expiration(seconds)"""
+    def set_expire(self, expiration: int):
+        """Expires task after expiration(seconds)
+        Expiration is set only if 1) there's no expiration set
+        or 2) the expiration requested is shorter than current ttl
+        This avoids the case where Task objects created from task_id
+        could keep extending TTL.
+        """
         ttl = self.rc.ttl(self.hname)
-        if ttl < 0:
-            # expire was not already set
+        if ttl < 0 or expiration < ttl:
             self.rc.expire(self.hname, expiration)
+        return self.rc.ttl(self.hname)
 
     def _generate_header(self):
         """Used to pass bits of information to EP"""
