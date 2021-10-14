@@ -94,6 +94,7 @@ class Forwarder(Process):
                  redis_port: int = 6379,
                  logging_level=logging.INFO,
                  heartbeat_period=30,
+                 result_ttl: int = 3600,
                  keys_dir=os.path.abspath('.curve')):
         """
         Parameters
@@ -124,6 +125,9 @@ class Forwarder(Process):
         heartbeat_period: int
              heartbeat interval in seconds. Default 2s
 
+        result_ttl: int
+             Task TTL in REDIS after result is available. Default=1hour
+
         keys_dir: str
              Directory in which curve keys will be stored, Default: '.curve'
         """
@@ -139,6 +143,7 @@ class Forwarder(Process):
         self.heartbeat_period = heartbeat_period
         self._last_heartbeat = time.time()
         self.keys_dir = keys_dir
+        self.result_ttl = result_ttl
         self.redis_pubsub = RedisPubSub(hostname=redis_address, port=redis_port)
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
         self.endpoint_db.connect()
@@ -523,6 +528,7 @@ class Forwarder(Process):
                 task.status = TaskState.FAILED
                 task.exception = message['exception']
                 task.completion_time = time.time()
+            task.set_expire(self.result_ttl)
 
             # this critical section is where the task ID is sent over RabbitMQ,
             # and the task result will not be acked if this fails
