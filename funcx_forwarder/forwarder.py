@@ -398,9 +398,15 @@ class Forwarder(Process):
                 zmq_task = Task(task_id,
                                 task.container,
                                 task.payload)
-            except Exception:
+            except TypeError:
+                # A TypeError is raised when the Task object can't be recomposed from REDIS
+                # due to missing values during high-workload events.
                 logger.exception(f"[CRITICAL] Unable to access task {task_id} from redis")
-                # TODO: log that task transitioned to lost
+                logger.debug(f"Task:{task_id} is now LOST", extra={
+                    "log_type": "task_lost",
+                    "endpoint_id": dest_endpoint,
+                    "task_id": task_id
+                })
                 return 0
 
             try:
