@@ -401,7 +401,7 @@ class Forwarder(Process):
             except TypeError:
                 # A TypeError is raised when the Task object can't be recomposed from REDIS
                 # due to missing values during high-workload events.
-                logger.exception(f"[CRITICAL] Unable to access task {task_id} from redis")
+                logger.exception(f"Unable to access task {task_id} from redis")
                 logger.debug(f"Task:{task_id} is now LOST", extra={
                     "log_type": "task_lost",
                     "endpoint_id": dest_endpoint,
