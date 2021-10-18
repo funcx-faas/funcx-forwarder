@@ -12,14 +12,13 @@ import redis
 import requests
 import zmq
 from funcx_common.tasks import TaskState
+from funcx_common.redis import FuncxRedisPubSub
 from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport, ResultsAck
 
 import funcx_forwarder
 from funcx_forwarder.taskqueue import TaskQueue
-from funcx_forwarder.queues.redis.redis_pubsub import RedisPubSub
 from funcx_forwarder.endpoint_db import EndpointDB
-from funcx_forwarder.queues.redis.tasks import RedisTask
-from funcx_forwarder.queues.redis.tasks import InternalTaskState, status_code_convert
+from .tasks import RedisTask, InternalTaskState, status_code_convert
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +143,7 @@ class Forwarder(Process):
         self._last_heartbeat = time.time()
         self.keys_dir = keys_dir
         self.result_ttl = result_ttl
-        self.redis_pubsub = RedisPubSub(hostname=redis_address, port=redis_port)
+        self.redis_pubsub = FuncxRedisPubSub(redis_address, port=redis_port)
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
         self.endpoint_db.connect()
 
@@ -173,11 +172,8 @@ class Forwarder(Process):
         # proxy attribute pointing to the underlying pubsub's client
         # this is used for now to get a client quickly and easily
         #
-        # TODO: funcx-common should be updated to allow a redis_client to be
-        # passed to any FuncxRedisConnection subclass, at which point there
-        # should be a redis_client attached to the current Forwarder object and
-        # it should be passed "down" into the pubsub client object rather than
-        # "pulling it up" from the pubsub
+        # TODO: consider changes in funcx-common so that there's a more obvious way
+        # to share a connection between the Forwarder and its attached pubsub
         return self.redis_pubsub.redis_client
 
     def command_processor(self, kill_event):
@@ -623,11 +619,6 @@ class Forwarder(Process):
             logger.info(f"[MAIN] Forwarder listening for tasks on: {self.tasks_port}")
             logger.info(f"[MAIN] Forwarder listening for results on: {self.results_port}")
             logger.info(f"[MAIN] Forwarder issuing commands on: {self.commands_port}")
-            try:
-                self.redis_pubsub.connect()
-            except Exception:
-                logger.exception("[MAIN] Failed to connect to Redis")
-                raise
 
             self.initialize_endpoint_queues()
             self._command_processor_thread = threading.Thread(target=self.command_processor,
