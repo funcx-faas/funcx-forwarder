@@ -12,7 +12,7 @@ import redis
 import requests
 import zmq
 from funcx_common.tasks import TaskState
-from funcx_common.redis import FuncxRedisPubSub
+from funcx_common.redis import FuncxRedisPubSub, default_redis_connection_factory
 from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport, ResultsAck
 
 import funcx_forwarder
@@ -143,7 +143,13 @@ class Forwarder(Process):
         self._last_heartbeat = time.time()
         self.keys_dir = keys_dir
         self.result_ttl = result_ttl
-        self.redis_pubsub = FuncxRedisPubSub(redis_address, port=redis_port)
+        # TODO: drop support for imperatively configuring the redis host information
+        # for the forwarder. Instead, FUNCX_COMMON_REDIS_URL should be used
+        self.redis_pubsub = FuncxRedisPubSub(
+            redis_client=default_redis_connection_factory(
+                f"redis://{redis_address}:{redis_port}"
+            )
+        )
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
         self.endpoint_db.connect()
 
