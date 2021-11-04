@@ -13,6 +13,7 @@ import requests
 import zmq
 from funcx_common.tasks import TaskState
 from funcx_common.redis import FuncxRedisPubSub, default_redis_connection_factory
+from funcx_common.task_storage import RedisS3Storage
 from funcx_endpoint.executors.high_throughput.messages import Task, Heartbeat, EPStatusReport, ResultsAck
 
 import funcx_forwarder
@@ -89,6 +90,8 @@ class Forwarder(Process):
                  address: str,
                  redis_address: str,
                  rabbitmq_conn_params,
+                 s3_bucket_name: str = os.environ['S3_BUCKET_NAME'],
+                 redis_storage_threshold: int = int(os.environ.get('REDIS_STORAGE_THRESHOLD', 20000)),
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
                  logging_level=logging.INFO,
@@ -152,7 +155,9 @@ class Forwarder(Process):
         )
         self.endpoint_db = EndpointDB(hostname=redis_address, port=redis_port)
         self.endpoint_db.connect()
-
+        if not s3_bucket_name:
+            raise Exception("S3 Storage bucket is required. Please specify by setting env variable `S3_BUCKET_NAME`")
+        self.task_storage = RedisS3Storage(s3_bucket_name, redis_threshold=redis_storage_threshold)
         logger.info(f"Initializing forwarder v{funcx_forwarder.__version__}")
         logger.info(f"Forwarder running on public address: {self.address}")
         logger.info(f"REDIS url: {self.redis_url}")
@@ -548,7 +553,7 @@ class Forwarder(Process):
             # and the task result will not be acked if this fails
             if 'result' in message:
                 task.status = TaskState.SUCCESS
-                task.result = message['result']
+                self.task_storage.store_result(task, message['result'])
                 task.completion_time = time.time()
             elif 'exception' in message:
                 task.status = TaskState.FAILED
