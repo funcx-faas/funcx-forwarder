@@ -1,18 +1,17 @@
-import redis
-import queue
-import uuid
-import time
-import logging
-
 import json
+import logging
+import queue
+import time
+import uuid
 
-from funcx_endpoint.queues.base import NotConnected
+import redis
+from funcx_common.redis import default_redis_connection_factory
 
 logger = logging.getLogger(__name__)
 
 
-class EndpointDB(object):
-    """ A basic redis DB
+class EndpointDB:
+    """A basic redis DB
 
     The queue only connects when the `connect` method is called to avoid
     issues with passing an object across processes.
@@ -31,26 +30,11 @@ class EndpointDB(object):
 
     """
 
-    def __init__(self, hostname, port=6379):
-        """ Initialize
-        """
-        self.hostname = hostname
-        self.port = port
-        self.redis_client = None
-
-    def connect(self):
-        """ Connects to the Redis server
-        """
-        try:
-            if not self.redis_client:
-                self.redis_client = redis.StrictRedis(host=self.hostname, port=self.port, decode_responses=True)
-        except redis.exceptions.ConnectionError:
-            logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname,
-                                                                                             self.port))
-            raise
+    def __init__(self, redis_client: redis.Redis):
+        self.redis_client = redis_client
 
     def get(self, endpoint_id, timeout=1, last=60 * 4):
-        """ Get an item from the redis queue
+        """Get an item from the redis queue
 
         Parameters
         ----------
@@ -60,26 +44,14 @@ class EndpointDB(object):
         timeout : int
            Timeout for the blocking get in seconds
         """
-        try:
-            end = min(self.redis_client.llen(f'ep_status_{endpoint_id}'), last)
-            items = self.redis_client.lrange(f'ep_status_{endpoint_id}', 0, end)
-            if not items:
-                raise queue.Empty
-
-        except queue.Empty:
-            raise
-
-        except AttributeError:
-            raise NotConnected(self)
-
-        except redis.exceptions.ConnectionError:
-            logger.exception(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
-            raise
-
+        end = min(self.redis_client.llen(f"ep_status_{endpoint_id}"), last)
+        items = self.redis_client.lrange(f"ep_status_{endpoint_id}", 0, end)
+        if not items:
+            raise queue.Empty
         return items
 
     def set_endpoint_metadata(self, endpoint_id, json_data):
-        """ Sets the endpoint metadata in a dict on redis
+        """Sets the endpoint metadata in a dict on redis
 
         Parameters
         ----------
@@ -90,42 +62,10 @@ class EndpointDB(object):
         json_data : {str: str}
         Endpoint metadata as json
         """
-        self.redis_client.hmset('endpoint:{}'.format(endpoint_id), json_data)
-        return
-
-    def get_all(self, timeout=1):
-        """ Get an item from the redis queue
-
-        Parameters
-        ----------
-        endpoint_id: str
-           Endpoint UUID
-
-        timeout : int
-           Timeout for the blocking get in seconds
-        """
-        try:
-            raise Exception("this method isn't ready hah")
-            endpoint_id = last = None
-            end = min(self.redis_client.llen(f'ep_status_{endpoint_id}'), last)
-            items = self.redis_client.lrange(f'ep_status_{endpoint_id}', 0, end)
-            if not items:
-                raise queue.Empty
-
-        except queue.Empty:
-            raise
-
-        except AttributeError:
-            raise NotConnected(self)
-
-        except redis.exceptions.ConnectionError:
-            logger.exception(f"ConnectionError while trying to connect to Redis@{self.hostname}:{self.port}")
-            raise
-
-        return items
+        self.redis_client.hmset("endpoint:{}".format(endpoint_id), json_data)
 
     def put(self, endpoint_id, payload):
-        """ Put's the key:payload into a dict and pushes the key onto a queue
+        """Put's the key:payload into a dict and pushes the key onto a queue
         Parameters
         ----------
         endpoint_id: str
@@ -134,45 +74,30 @@ class EndpointDB(object):
         payload : dict
             Dict of task information to be stored
         """
-        payload['timestamp'] = time.time()
-        try:
-            # self.redis_client.set(f'{self.prefix}:{key}', json.dumps(payload))
-            self.redis_client.lpush(f'ep_status_{endpoint_id}', json.dumps(payload))
-            if 'new_core_hrs' in payload:
-                self.redis_client.incrbyfloat('funcx_worldwide_counter', amount=payload['new_core_hrs'])
-            self.redis_client.ltrim(f'ep_status_{endpoint_id}', 0, 2880)  # Keep 2 x 24hr x 60 min worth of logs
-
-        except AttributeError:
-            raise NotConnected(self)
-        except redis.exceptions.ConnectionError:
-            logger.exception("ConnectionError while trying to connect to Redis@{}:{}".format(self.hostname, self.port))
-            raise
-
-    @property
-    def is_connected(self):
-        return self.redis_client is not None
-
-    def __str__(self):
-        return self.__repr__()
+        payload["timestamp"] = time.time()
+        # self.redis_client.set(f'{self.prefix}:{key}', json.dumps(payload))
+        self.redis_client.lpush(f"ep_status_{endpoint_id}", json.dumps(payload))
+        if "new_core_hrs" in payload:
+            self.redis_client.incrbyfloat(
+                "funcx_worldwide_counter", amount=payload["new_core_hrs"]
+            )
+        self.redis_client.ltrim(
+            f"ep_status_{endpoint_id}", 0, 2880
+        )  # Keep 2 x 24hr x 60 min worth of logs
 
     def __repr__(self):
-        return "<RedisQueue at {}:{}".format(self.hostname, self.port)
-
-    def close(self):
-        self.redis_client.connection_pool.disconnect()
-        del self.redis_client
+        return f"EndpointDB({self.redis_client}"
 
 
 def test():
-    rq = EndpointDB('127.0.0.1')
-    rq.connect()
+    rq = EndpointDB(default_redis_connection_factory())
     ep_id = str(uuid.uuid4())
     for i in range(20):
-        rq.put(ep_id, {'c': i, 'm': i * 100})
+        rq.put(ep_id, {"c": i, "m": i * 100})
 
     res = rq.get(ep_id, timeout=1)
     print("Result : ", res)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test()
