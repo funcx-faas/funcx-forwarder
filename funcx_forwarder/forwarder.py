@@ -385,7 +385,8 @@ class Forwarder(Process):
         # Now wait for any messages on REDIS that needs forwarding.
         task = None
         try:
-            dest_endpoint, task = self.redis_pubsub.get(timeout=0)
+            dest_endpoint, task_id = self.redis_pubsub.get(timeout=0)
+            task = RedisTask(self.redis_client, task_id)
             logger.debug(f"Got message from REDIS: {dest_endpoint}:{task}", extra={
                 "log_type": "forwarder_redis_task_get",
                 "endpoint_id": dest_endpoint
