@@ -90,8 +90,10 @@ class Forwarder(Process):
                  address: str,
                  redis_address: str,
                  rabbitmq_conn_params,
-                 s3_bucket_name: str = os.environ['S3_BUCKET_NAME'],
-                 redis_storage_threshold: int = int(os.environ.get('REDIS_STORAGE_THRESHOLD', 20000)),
+                 s3_bucket_name: str = os.environ['FUNCX_S3_BUCKET_NAME'],
+                 redis_storage_threshold: int = int(os.environ.get(
+                     'FUNCX_REDIS_STORAGE_THRESHOLD',
+                     20000)),
                  endpoint_ports=(55001, 55002, 55003),
                  redis_port: int = 6379,
                  logging_level=logging.INFO,
