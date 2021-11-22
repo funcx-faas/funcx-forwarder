@@ -11,7 +11,6 @@ from funcx_common.redis import (
 )
 from funcx_common.tasks import TaskProtocol, TaskState
 from funcx_endpoint.executors.high_throughput.messages import TaskStatusCode
-
 from redis import Redis
 
 
@@ -48,6 +47,7 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
     container = RedisField()
     payload = RedisField(serde=JSON_SERDE)
     result = RedisField()
+    result_reference = RedisField(serde=JSON_SERDE)
     exception = RedisField()
     completion_time = RedisField()
     task_group_id = RedisField()

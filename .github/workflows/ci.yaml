@@ -41,6 +41,8 @@ jobs:
       run: pytest
       env:
         REDIS_HOST: redis  # this is the hostname for the service container
+        FUNCX_S3_BUCKET_NAME: BOGUS_BUCKET_NAME  # this is a temporary fix
+        FUNCX_REDIS_STORAGE_THRESHOLD: 512000  # Max storage allowed in redis
 
   publish:
     # only trigger on pushes to the main repo (not forks, and not PRs)
