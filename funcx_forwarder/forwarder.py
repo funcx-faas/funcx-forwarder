@@ -153,7 +153,6 @@ class Forwarder(Process):
         redis_client = default_redis_connection_factory(f"redis://{redis_address}:{redis_port}")
         self.redis_pubsub = FuncxRedisPubSub(redis_client=redis_client)
         self.endpoint_db = EndpointDB(redis_client=redis_client)
-        self.endpoint_db.connect()
         if not s3_bucket_name:
             raise Exception("S3 Storage bucket is required. Please specify by setting env variable `S3_BUCKET_NAME`")
         self.task_storage = RedisS3Storage(s3_bucket_name, redis_threshold=redis_storage_threshold)
