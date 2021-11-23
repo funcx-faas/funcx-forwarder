@@ -2,14 +2,16 @@
 
 """
 import logging
-from .version import VERSION
+
 from pythonjsonlogger import jsonlogger
+
+from .version import VERSION
 
 __author__ = "The funcX team"
 __version__ = VERSION
 
 
-def set_stream_logger(name='funcx_forwarder', level=logging.DEBUG, format_string=None):
+def set_stream_logger(name="funcx_forwarder", level=logging.DEBUG, format_string=None):
     """Add a stream log handler.
 
     Args:
@@ -33,4 +35,4 @@ def set_stream_logger(name='funcx_forwarder', level=logging.DEBUG, format_string
     return logger
 
 
-logging.getLogger('funcx_forwarder').addHandler(logging.NullHandler())
+logging.getLogger("funcx_forwarder").addHandler(logging.NullHandler())

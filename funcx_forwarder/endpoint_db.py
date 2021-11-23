@@ -62,7 +62,7 @@ class EndpointDB:
         json_data : {str: str}
         Endpoint metadata as json
         """
-        self.redis_client.hmset("endpoint:{}".format(endpoint_id), json_data)
+        self.redis_client.hmset(f"endpoint:{endpoint_id}", json_data)
 
     def put(self, endpoint_id, payload):
         """Put's the key:payload into a dict and pushes the key onto a queue
