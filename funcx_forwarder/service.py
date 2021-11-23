@@ -184,7 +184,8 @@ def cli_run():
         "-a",
         "--address",
         required=True,
-        help="Address at which the service is running. This is the address passed to the endpoints",
+        help="Address at which the service is running. "
+        "This is the address passed to the endpoints",
     )
     parser.add_argument("-c", "--config", default=None, help="Config file")
     parser.add_argument("-r", "--redishost", required=True, help="Redis host address")
@@ -260,10 +261,14 @@ def cli_run():
     with open('/tmp/client.key') as f:
         client_key = f.read()
     print("Pushing client key : ", client_key)
-    app.config['forwarder_command'].put({'command' : 'REGISTER_ENDPOINT',
-                                         'endpoint_id': 'edb1ebd4-f99a-4f99-b8aa-688da5b5ede7',
-                                         'client_public_key': client_key,
-                                         'id': 0})
+    app.config['forwarder_command'].put(
+        {
+            'command' : 'REGISTER_ENDPOINT',
+            'endpoint_id': 'edb1ebd4-f99a-4f99-b8aa-688da5b5ede7',
+            'client_public_key': client_key,
+            'id': 0
+         }
+    )
     response = app.config['forwarder_response'].get()
     print(f"Registration response : {response}")
     """

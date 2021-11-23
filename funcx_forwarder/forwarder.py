@@ -14,6 +14,7 @@ import requests
 import zmq
 from funcx_common.redis import FuncxRedisPubSub, default_redis_connection_factory
 from funcx_common.task_storage import RedisS3Storage
+from funcx_common.tasks import TaskState
 from funcx_endpoint.executors.high_throughput.messages import (
     EPStatusReport,
     Heartbeat,
@@ -65,14 +66,18 @@ class Forwarder(Process):
 
     Endpoint States
     ---------------
-    - Registered: Endpoint has been registered with the service but has not yet connected
+    - Registered: Endpoint has been registered with the service but has not yet
+      connected
     - Connected: Endpoint has connected, meaning ZMQ messages can be sent and received
-    - Disconnected: ZMQ message sending is failing for this endpoint, making it disconnected
+    - Disconnected: ZMQ message sending is failing for this endpoint, making it
+      disconnected
 
     * All endpoints and endpoint states are forgotten when a forwarder restarts
-    * Endpoints always start in the Registered state. Before that, the forwarder does not know they exist
-    * Endpoints can send a registration message at any time while in Connected/Disconnected state and it will not impact the current state
-    * Results can arrive on the forwarder from an endpoint when it is in any state. See the NOTE below at handle_results
+    * Endpoints always start in the Registered state. Before that, the forwarder does
+      not know they exist * Endpoints can send a registration message at any time while
+      in Connected/Disconnected state and it will not impact the current state
+    * Results can arrive on the forwarder from an endpoint when it is in any state. See
+      the NOTE below at handle_results
 
     Endpoint State Transitions
     --------------------------
@@ -100,22 +105,21 @@ class Forwarder(Process):
         redis_address: str,
         rabbitmq_conn_params,
         s3_bucket_name: str = os.environ["FUNCX_S3_BUCKET_NAME"],
-        redis_storage_threshold: int = int(
-            os.environ.get("FUNCX_REDIS_STORAGE_THRESHOLD", 20000)
-        ),
+        redis_storage_threshold: t.Optional[int] = None,
         endpoint_ports=(55001, 55002, 55003),
         redis_port: int = 6379,
         logging_level=logging.INFO,
         heartbeat_period=30,
         result_ttl: int = 3600,
-        keys_dir=os.path.abspath(".curve"),
+        keys_dir=None,
     ):
         """
         Parameters
         ----------
         command_queue: Queue
              Queue used by the service to send commands such as 'REGISTER_ENDPOINT'
-             Forwarder expects dicts of the form {'command':<TERMINATE/REGISTER_ENDPOINT'> ...}
+             Forwarder expects dicts of the form
+             {'command':<TERMINATE/REGISTER_ENDPOINT'> ...}
 
         response_queue: Queue
              Queue over which responses to commands are returned
@@ -145,6 +149,13 @@ class Forwarder(Process):
         keys_dir: str
              Directory in which curve keys will be stored, Default: '.curve'
         """
+        if keys_dir is None:
+            keys_dir = os.path.abspath(".curve")
+        if redis_storage_threshold is None:
+            redis_storage_threshold = int(
+                os.environ.get("FUNCX_REDIS_STORAGE_THRESHOLD", 20000)
+            )
+
         super().__init__()
         self.command_queue = command_queue
         self.response_queue = response_queue
@@ -167,7 +178,8 @@ class Forwarder(Process):
         self.endpoint_db = EndpointDB(redis_client=redis_client)
         if not s3_bucket_name:
             raise Exception(
-                "S3 Storage bucket is required. Please specify by setting env variable `S3_BUCKET_NAME`"
+                "S3 Storage bucket is required. "
+                "Please specify by setting env variable `S3_BUCKET_NAME`"
             )
         self.task_storage = RedisS3Storage(
             s3_bucket_name, redis_threshold=redis_storage_threshold
@@ -306,8 +318,8 @@ class Forwarder(Process):
         This method does nothing if the endpoint is already disconnected.
 
         Triggered by zmq messages not getting delivered (heartbeats, tasks, result acks)
-        TODO: This needs some extensive testing. It is unclear how well detecting failures
-        will work on WAN networks with latencies.
+        TODO: This needs some extensive testing. It is unclear how well detecting
+        failures will work on WAN networks with latencies.
         """
         disconnected_endpoint = self.connected_endpoints.pop(endpoint_id, None)
         # if the endpoint is already disconnected, simply return
@@ -331,7 +343,8 @@ class Forwarder(Process):
         self.redis_pubsub.subscribe(ep_id)
 
     def heartbeat(self):
-        """ZMQ contexts are not thread-safe, heartbeats should happen on the same thread."""
+        """ZMQ contexts are not thread-safe.
+        heartbeats should happen on the same thread."""
         if self._last_heartbeat + self.heartbeat_period > time.time():
             return
         logger.info("Heartbeat")
@@ -369,10 +382,11 @@ class Forwarder(Process):
             reg_message = pickle.loads(b_reg_message)
 
             if ep_id in self.connected_endpoints:
-                # this is normal, it just means that the endpoint never reached Disconnected
-                # state before connecting again
+                # this is normal, it just means that the endpoint never reached
+                # Disconnected state before connecting again
                 logger.info(
-                    f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in connected list",
+                    f"[MAIN] Endpoint:{ep_id} attempted connect when it already is in "
+                    "connected list",
                     extra={"log_type": "endpoint_reconnected", "endpoint_id": ep_id},
                 )
             else:
@@ -385,7 +399,8 @@ class Forwarder(Process):
                     },
                 )
                 # Now subscribe to messages for ep_id
-                # if this endpoint is already in self.connected_endpoints, it is already subscribed
+                # if this endpoint is already in self.connected_endpoints, it is already
+                # subscribed
                 self.add_subscriber(ep_id)
 
             self.connected_endpoints[ep_id] = {
@@ -437,7 +452,9 @@ class Forwarder(Process):
             # At this point we should be unsubscribed and receiving only messages
             # from the TCP buffers.
             logger.warning(
-                f"Putting back REDIS message for unconnected endpoint: {dest_endpoint}:{task}",
+                "Putting back REDIS message for unconnected endpoint: %s:%s",
+                dest_endpoint,
+                task,
                 extra={
                     "log_type": "forwarder_redis_task_put",
                     "endpoint_id": dest_endpoint,
@@ -451,8 +468,8 @@ class Forwarder(Process):
                 logger.info(f"Sending task:{task_id} to endpoint:{dest_endpoint}")
                 zmq_task = Task(task_id, task.container, task.payload)
             except TypeError:
-                # A TypeError is raised when the Task object can't be recomposed from REDIS
-                # due to missing values during high-workload events.
+                # A TypeError is raised when the Task object can't be recomposed from
+                # redis due to missing values during high-workload events.
                 logger.exception(f"Unable to access task {task_id} from redis")
                 logger.debug(
                     f"Task:{task_id} is now LOST",
@@ -484,24 +501,25 @@ class Forwarder(Process):
     def handle_results(self):
         """Receive incoming results on results_q and update Redis with results
 
-        NOTE: Results can arrive on this queue when the endpoint is in any of the 3 states
-        (Registered, Connected, Disconnected), and we will accept the results. This is because
-        we do not tie the connection status of this queue to the state of the endpoint, as
-        doing so could mean rejecting perfectly good results on a working ZMQ connection.
+        NOTE: Results can arrive on this queue when the endpoint is in any of the 3
+        states (Registered, Connected, Disconnected), and we will accept the results.
+        This is because we do not tie the connection status of this queue to the state
+        of the endpoint, as doing so could mean rejecting perfectly good results on a
+        working ZMQ connection.
 
         Registered =>
-            Getting results in this state means this zmq pipe has opened and results are sent
-            over before the connection message has been sent by the endpoint.
+            Getting results in this state means this zmq pipe has opened and results are
+            sent over before the connection message has been sent by the endpoint.
 
         Connected =>
-            Getting results in this state is normal, as a connection message has been sent
-            and zmq pipes are working.
+            Getting results in this state is normal, as a connection message has been
+            sent and zmq pipes are working.
 
         Disconnected =>
-            Getting results in this state means the endpoint registered and was connected,
-            but a zmq send failed over a different pipe, sending the endpoint do Disconnected
-            state. The results pipe could still be working, or it could've started working
-            again before the connection message is sent again
+            Getting results in this state means the endpoint registered and was
+            connected, but a zmq send failed over a different pipe, sending the endpoint
+            do Disconnected state. The results pipe could still be working, or it
+            could've started working again before the connection message is sent again
         """
         try:
             # timeout in ms, when 0 it's nonblocking
@@ -539,7 +557,8 @@ class Forwarder(Process):
                     self.endpoint_db.put(endpoint_id, message.ep_status)
                 except Exception:
                     logger.error(
-                        "Caught error while trying to push endpoint status data into redis"
+                        "Caught error while trying to push endpoint status data "
+                        "into redis"
                     )
 
                 # Update task status from endpoint
@@ -560,7 +579,8 @@ class Forwarder(Process):
             result_or_exception = "result" in message or "exception" in message
             if not result_or_exception:
                 logger.warning(
-                    "A task result message was received without a result or an exception",
+                    "A task result message was received without a result or an "
+                    "exception",
                     extra={
                         "endpoint_id": endpoint_id,
                         "endpoint_status_message": message.__dict__,
@@ -590,15 +610,18 @@ class Forwarder(Process):
             try:
                 if task.internal_status == InternalTaskState.COMPLETE:
                     logger.debug(f"Duplicate result received for task: {task_id}")
-                    # resend results ack in case the previous ack was not received for this result
+                    # resend results ack in case the previous ack was not received for
+                    # this result
                     self.handle_results_ack(endpoint_id, task_id)
                     return
             except ValueError:
-                # A ValueError is raised if the task was wiped from REDIS by a client-fetch
+                # A ValueError is raised if the task was wiped from redis by a
+                # client-fetch
                 # We should ack the endpoint so that it can wipe it's local cache
                 self.handle_results_ack(endpoint_id, task_id)
                 logger.warning(
-                    f"ACK requested for task:{task_id} which was already fetched by client."
+                    f"ACK requested for task:{task_id} which was "
+                    "already fetched by client."
                 )
                 return
 
@@ -651,7 +674,8 @@ class Forwarder(Process):
     def handle_results_ack(self, endpoint_id, task_id):
         if endpoint_id not in self.connected_endpoints:
             logger.warning(
-                f"Attempting to send results Ack to disconnected endpoint: {endpoint_id}",
+                "Attempting to send results Ack to disconnected endpoint: %s",
+                endpoint_id,
                 extra={
                     "log_type": "disconnected_ack_attempt",
                     "endpoint_id": endpoint_id,
@@ -666,7 +690,8 @@ class Forwarder(Process):
         # where we started sending the funcx_endpoint_version key to the forwarder
         if "funcx_endpoint_version" not in reg_message:
             logger.debug(
-                f"Ack not sent to endpoint {endpoint_id} for backwards compatability because it has version <0.3.3"
+                f"Ack not sent to endpoint {endpoint_id} for backwards compatability "
+                "because it has version <0.3.3"
             )
             return
 
@@ -709,14 +734,17 @@ class Forwarder(Process):
                 if self.kill_event.is_set():
                     logger.critical("Kill event set. Starting termination sequence")
                     # 1. [TODO] Unsubscribe from all
-                    # 2. [TODO] Flush all tasks received back to their queues for reprocessing.
-                    # 3. [TODO] Figure out how we can trigger a scaling event to replace lost forwarder?
+                    # 2. [TODO] Flush all tasks received back to their queues for
+                    #           reprocessing.
+                    # 3. [TODO] Figure out how we can trigger a scaling event to replace
+                    #           lost forwarder?
 
                 # Send heartbeats to every connected manager
                 self.heartbeat()
 
                 self.handle_endpoint_connection()
-                # [TODO] This step could be in a timed loop. Ideally after we have a perf study
+                # [TODO] This step could be in a timed loop. Ideally after we have a
+                # perf study
                 self.forward_task_to_endpoint()
                 self.handle_results()
         except Exception:

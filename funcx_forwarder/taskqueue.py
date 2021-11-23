@@ -1,5 +1,6 @@
 import logging
 import os
+import typing as t
 import uuid
 
 import zmq
@@ -16,13 +17,13 @@ class TaskQueue:
         self,
         address: str,
         port: int,
-        identity: str = str(uuid.uuid4()),
+        identity: t.Optional[str] = None,
         zmq_context=None,
         set_hwm=False,
         RCVTIMEO=None,
         SNDTIMEO=None,
         ironhouse: bool = False,
-        keys_dir: str = os.path.abspath(".curve"),
+        keys_dir: t.Optional[str] = None,
         mode: str = "client",
     ):
         """
@@ -37,7 +38,8 @@ class TaskQueue:
 
         identity : str
            Applies only to clients, where the identity must match the endpoint uuid.
-           This will be utf-8 encoded on the wire. A random uuid4 string is set by default.
+           This will be utf-8 encoded on the wire. A random uuid4 string is set by
+           default.
 
         mode: string
            Either 'client' or 'server'
@@ -49,6 +51,11 @@ class TaskQueue:
            Only valid for server mode. Setting this flag switches the server to require
            client keys to be available on the server in the keys_dir.
         """
+        if identity is None:
+            identity = str(uuid.uuid4())
+        if keys_dir is None:
+            keys_dir = os.path.abspath(".curve")
+
         if zmq_context:
             self.context = zmq_context
         else:
