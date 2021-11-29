@@ -46,8 +46,10 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
     endpoint = t.cast(str, RedisField())
     container = RedisField()
     payload = RedisField(serde=JSON_SERDE)
-    result = RedisField()
-    result_reference = RedisField(serde=JSON_SERDE)
+    result = t.cast(t.Optional[str], RedisField())
+    result_reference = t.cast(
+        t.Optional[t.Dict[str, t.Any]], RedisField(serde=JSON_SERDE)
+    )
     exception = RedisField()
     completion_time = RedisField()
     task_group_id = RedisField()
@@ -55,7 +57,7 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
     # must keep ttl and _set_expire in merge
     # tasks expire in 1 week, we are giving some grace period for
     # long-lived clients, and we'll revise this if there are complaints
-    TASK_TTL = timedelta(weeks=2).total_seconds()
+    TASK_TTL = int(timedelta(weeks=2).total_seconds())
 
     def __init__(
         self,
@@ -119,4 +121,4 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
     @classmethod
     def exists(cls, redis_client: Redis, task_id: str) -> bool:
         """Check if a given task_id exists in Redis"""
-        return redis_client.exists(f"task_{task_id}")
+        return bool(redis_client.exists(f"task_{task_id}"))

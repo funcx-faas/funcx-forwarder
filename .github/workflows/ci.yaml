@@ -29,16 +29,16 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: install tox
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        python -m pip install '.[dev]'
+        python -m pip install tox
     - name: Check for vulnerabilities in libraries
-      run: safety check
+      run: tox -e safety
     - name: Lint
-      run: flake8
+      run: tox -e lint,mypy
     - name: Test
-      run: pytest
+      run: tox -e py
       env:
         REDIS_HOST: redis  # this is the hostname for the service container
         FUNCX_S3_BUCKET_NAME: BOGUS_BUCKET_NAME  # this is a temporary fix

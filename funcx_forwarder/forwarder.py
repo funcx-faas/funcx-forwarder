@@ -5,7 +5,8 @@ import pickle
 import queue
 import threading
 import time
-from multiprocessing import Process, Queue, Event
+from multiprocessing import Process, Event
+import typing as t
 
 import pika
 import redis
@@ -142,7 +143,7 @@ class Forwarder(Process):
         self.redis_url = f"{redis_address}:{redis_port}"
         self.rabbitmq_conn_params = rabbitmq_conn_params
         self.tasks_port, self.results_port, self.commands_port = endpoint_ports
-        self.connected_endpoints = {}
+        self.connected_endpoints: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.kill_event = Event()
         self.heartbeat_period = heartbeat_period
         self._last_heartbeat = time.time()
@@ -653,10 +654,3 @@ class Forwarder(Process):
         except Exception:
             logger.exception('Caught exception while running forwarder')
             sys.exit(-1)
-
-
-if __name__ == '__main__':
-
-    command, response = Queue(), Queue()
-    fw = Forwarder(command, response, '127.0.0.1')
-    fw.run()
