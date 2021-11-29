@@ -1,13 +1,14 @@
-from funcx_forwarder.queues.redis.redis_pubsub import RedisPubSub
-from funcx_endpoint.executors.high_throughput.messages import Task
 import argparse
 import time
 
+from funcx_endpoint.executors.high_throughput.messages import Task
+
+from funcx_forwarder.queues.redis.redis_pubsub import RedisPubSub
+
 
 def test_client(ep=None):
-    ''' Untested
-    '''
-    receiver = RedisPubSub('127.0.0.1')
+    """Untested"""
+    receiver = RedisPubSub("127.0.0.1")
     receiver.connect()
     receiver.subscribe(ep)
 
@@ -22,7 +23,7 @@ def test_client(ep=None):
             print("Received msg : ", msg)
             if not t:
                 t = time.time()
-            if task == 'sentinel':
+            if task == "sentinel":
                 print("Breaking received sentinel")
                 delta = time.time() - t
                 break
@@ -31,34 +32,47 @@ def test_client(ep=None):
         except Exception:
             pass
 
-    print("Performance : {:8.3f} Msgs/s".format(count / delta))
+    print(f"Performance : {count / delta:8.3f} Msgs/s")
 
 
 def test_server(ep=None, count=1000, delay=0):
-    ''' Untested
-    '''
-    sender = RedisPubSub('127.0.0.1')
+    """Untested"""
+    sender = RedisPubSub("127.0.0.1")
     sender.connect()
-    task = Task(sender.redis_client, 'task.0', container='RAW', serializer='', payload='Primer')
+    task = Task(
+        sender.redis_client, "task.0", container="RAW", serializer="", payload="Primer"
+    )
     sender.put(ep, task)
     for i in range(count):
-        task = Task(sender.redis_client, f'task.{i}', container='RAW', serializer='',
-                    payload=f'task body for task.{i}')
+        task = Task(
+            sender.redis_client,
+            f"task.{i}",
+            container="RAW",
+            serializer="",
+            payload=f"task body for task.{i}",
+        )
         sender.put(ep, task)
         time.sleep(delay)
 
-    task = Task(sender.redis_client, 'sentinel', container='RAW', serializer='',
-                payload='sentinel')
+    task = Task(
+        sender.redis_client,
+        "sentinel",
+        container="RAW",
+        serializer="",
+        payload="sentinel",
+    )
     sender.put(ep, task)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--client", action='store_true',
-                        help="Run in client mode")
-    parser.add_argument("-e", "--endpoint_id", default='testing_ep1',
-                        help="Run in client mode")
+    parser.add_argument(
+        "-c", "--client", action="store_true", help="Run in client mode"
+    )
+    parser.add_argument(
+        "-e", "--endpoint_id", default="testing_ep1", help="Run in client mode"
+    )
 
     args = parser.parse_args()
 

@@ -2,6 +2,7 @@ import os
 
 import pytest
 import redis
+
 from funcx_forwarder import service
 
 
