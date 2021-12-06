@@ -50,6 +50,8 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
     result_reference = t.cast(
         t.Optional[t.Dict[str, t.Any]], RedisField(serde=JSON_SERDE)
     )
+    data_url = RedisField()
+    recursive = RedisField()
     exception = RedisField()
     completion_time = RedisField()
     task_group_id = RedisField()
@@ -67,6 +69,8 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
         function_id: t.Optional[str] = None,
         container: t.Optional[str] = None,
         payload: t.Any = None,
+        data_url: str = "",
+        recursive: str = "",
         task_group_id: t.Optional[str] = None,
     ) -> None:
         """
@@ -95,11 +99,15 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
             self.container = container
         if payload is not None:
             self.payload = payload
+        if data_url is not None:
+            self.data_url = data_url
+        if recursive is not None:
+            self.recursive = recursive
         if task_group_id is not None:
             self.task_group_id = task_group_id
 
         # Used to pass bits of information to EP
-        self.header = f"{self.task_id};{self.container};None"
+        self.header = f"{self.task_id};{self.container};{self.data_url};{self.recursive}"
         self.set_expire(RedisTask.TASK_TTL)
 
     def set_expire(self, expiration: int):
