@@ -13,7 +13,7 @@ import redis
 import requests
 import zmq
 from funcx_common.redis import FuncxRedisPubSub, default_redis_connection_factory
-from funcx_common.task_storage import RedisS3Storage
+from funcx_common.task_storage import get_default_task_storage
 from funcx_common.tasks import TaskState
 from funcx_endpoint.executors.high_throughput.messages import (
     EPStatusReport,
@@ -104,8 +104,6 @@ class Forwarder(Process):
         address: str,
         redis_address: str,
         rabbitmq_conn_params,
-        s3_bucket_name: str = os.environ["FUNCX_S3_BUCKET_NAME"],
-        redis_storage_threshold: t.Optional[int] = None,
         endpoint_ports=(55001, 55002, 55003),
         redis_port: int = 6379,
         logging_level=logging.INFO,
@@ -151,10 +149,6 @@ class Forwarder(Process):
         """
         if keys_dir is None:
             keys_dir = os.path.abspath(".curve")
-        if redis_storage_threshold is None:
-            redis_storage_threshold = int(
-                os.environ.get("FUNCX_REDIS_STORAGE_THRESHOLD", 20000)
-            )
 
         super().__init__()
         self.command_queue = command_queue
@@ -176,14 +170,7 @@ class Forwarder(Process):
         )
         self.redis_pubsub = FuncxRedisPubSub(redis_client=redis_client)
         self.endpoint_db = EndpointDB(redis_client=redis_client)
-        if not s3_bucket_name:
-            raise Exception(
-                "S3 Storage bucket is required. "
-                "Please specify by setting env variable `S3_BUCKET_NAME`"
-            )
-        self.task_storage = RedisS3Storage(
-            s3_bucket_name, redis_threshold=redis_storage_threshold
-        )
+        self.task_storage = get_default_task_storage()
         logger.info(f"Initializing forwarder v{funcx_forwarder.__version__}")
         logger.info(f"Forwarder running on public address: {self.address}")
         logger.info(f"REDIS url: {self.redis_url}")
