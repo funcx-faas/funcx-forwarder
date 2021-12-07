@@ -107,7 +107,9 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
             self.task_group_id = task_group_id
 
         # Used to pass bits of information to EP
-        self.header = f"{self.task_id};{self.container};{self.data_url};{self.recursive}"
+        self.header = (
+            f"{self.task_id};{self.container};{self.data_url};{self.recursive}"
+        )
         self.set_expire(RedisTask.TASK_TTL)
 
     def set_expire(self, expiration: int):
