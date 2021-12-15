@@ -466,7 +466,9 @@ class Forwarder(Process):
             try:
                 task_id = task.task_id
                 logger.info(f"Sending task:{task_id} to endpoint:{dest_endpoint}")
-                zmq_task = Task(task_id, task.container, task.payload)
+                zmq_task = Task(
+                    task_id, task.container, task.payload, task.data_url, task.recursive
+                )
             except TypeError:
                 # A TypeError is raised when the Task object can't be recomposed from
                 # redis due to missing values during high-workload events.
