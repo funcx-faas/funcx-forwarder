@@ -467,7 +467,11 @@ class Forwarder(Process):
                 task_id = task.task_id
                 logger.info(f"Sending task:{task_id} to endpoint:{dest_endpoint}")
                 zmq_task = Task(
-                    task_id, task.container, task.payload, task.data_url, task.recursive
+                    task_id,
+                    task.container,
+                    task.payload,
+                    data_url=task.data_url,
+                    recursive=task.recursive,
                 )
             except TypeError:
                 # A TypeError is raised when the Task object can't be recomposed from
