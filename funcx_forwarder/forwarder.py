@@ -435,6 +435,8 @@ class Forwarder(Process):
             logger.exception("Caught exception waiting for message from REDIS")
             return 0
 
+        task_payload = self.task_storage.get_payload(task)
+
         if dest_endpoint not in self.connected_endpoints:
             # At this point we should be unsubscribed and receiving only messages
             # from the TCP buffers.
@@ -453,7 +455,7 @@ class Forwarder(Process):
             try:
                 task_id = task.task_id
                 logger.info(f"Sending task:{task_id} to endpoint:{dest_endpoint}")
-                zmq_task = Task(task_id, task.container, task.payload)
+                zmq_task = Task(task_id, task.container, task_payload)
             except TypeError:
                 # A TypeError is raised when the Task object can't be recomposed from
                 # redis due to missing values during high-workload events.

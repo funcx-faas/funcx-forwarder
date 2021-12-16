@@ -10,7 +10,7 @@ REQUIRES = [
     "configobj==5.0.6",
     "texttable>=1.6.4,<2",
     "redis==3.5.3",
-    "funcx-common[redis,boto3]==0.0.10",
+    "funcx-common[redis,boto3]==0.0.11-a0",
     "funcx @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx&subdirectory=funcx_sdk",  # noqa: E501
     "funcx-endpoint @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx-endpoint&subdirectory=funcx_endpoint",  # noqa: E501
     "pyzmq==22.0.3",
