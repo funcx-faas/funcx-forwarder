@@ -70,7 +70,7 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
         container: t.Optional[str] = None,
         payload: t.Any = None,
         data_url: t.Optional[str] = None,
-        recursive:  t.Optional[str] = None,
+        recursive: t.Optional[str] = None,
         task_group_id: t.Optional[str] = None,
     ) -> None:
         """
