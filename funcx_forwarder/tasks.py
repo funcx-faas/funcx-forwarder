@@ -69,8 +69,8 @@ class RedisTask(TaskProtocol, metaclass=HasRedisFieldsMeta):
         function_id: t.Optional[str] = None,
         container: t.Optional[str] = None,
         payload: t.Any = None,
-        data_url: str = "",
-        recursive: str = "",
+        data_url: t.Optional[str] = None,
+        recursive:  t.Optional[str] = None,
         task_group_id: t.Optional[str] = None,
     ) -> None:
         """

@@ -440,6 +440,8 @@ class Forwarder(Process):
                 extra={
                     "log_type": "forwarder_redis_task_get",
                     "endpoint_id": dest_endpoint,
+                    "data_url": task.data_url,
+                    "recursive": task.recursive,
                 },
             )
         except queue.Empty:
