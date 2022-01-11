@@ -5,8 +5,8 @@ import queue
 import sys
 import threading
 import time
-from datetime import timedelta
 import typing as t
+from datetime import timedelta
 from multiprocessing import Event, Process
 
 import pika
@@ -40,6 +40,8 @@ loglevels = {
     10: "DEBUG",
     0: "NOTSET",
 }
+
+RESULT_TTL = int(timedelta(weeks=2).total_seconds())
 
 
 class Forwarder(Process):
@@ -109,7 +111,7 @@ class Forwarder(Process):
         redis_port: int = 6379,
         logging_level=logging.INFO,
         heartbeat_period=30,
-        result_ttl: int = int(timedelta(weeks=2).total_seconds),
+        result_ttl: int = RESULT_TTL,
         keys_dir=None,
     ):
         """
