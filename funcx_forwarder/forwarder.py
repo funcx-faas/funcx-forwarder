@@ -106,7 +106,8 @@ class Forwarder(Process):
         response_queue,
         address: str,
         redis_address: str,
-        rabbitmq_conn_params,
+        rabbitmq_conn_params: pika.URLParameters,
+        rabbitmq_queue_ttl: int,
         endpoint_ports=(55001, 55002, 55003),
         redis_port: int = 6379,
         logging_level=logging.INFO,
@@ -130,6 +131,13 @@ class Forwarder(Process):
 
         redis_address : str
              full address to connect to redis. Required
+
+        rabbitmq_conn_params : pika.URLParameters
+             URL Params for RabbitMQ connection
+
+        rabbitmq_queue_ttl : int
+             RabbitMQ queue TTL in seconds
+             (must match websocket service rabbitmq_queue_ttl)
 
         endpoint_ports : (int, int, int)
              A triplet of ports: (tasks_port, results_port, commands_port)
@@ -159,6 +167,7 @@ class Forwarder(Process):
         self.address = address
         self.redis_url = f"{redis_address}:{redis_port}"
         self.rabbitmq_conn_params = rabbitmq_conn_params
+        self.rabbitmq_queue_ttl = rabbitmq_queue_ttl
         self.tasks_port, self.results_port, self.commands_port = endpoint_ports
         self.connected_endpoints: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.kill_event = Event()
@@ -177,6 +186,7 @@ class Forwarder(Process):
         logger.info(f"Initializing forwarder v{funcx_forwarder.__version__}")
         logger.info(f"Forwarder running on public address: {self.address}")
         logger.info(f"REDIS url: {self.redis_url}")
+        logger.info(f"RabbitMQ Queue TTL: {self.rabbitmq_queue_ttl}")
         logger.info(f"Log level set to {loglevels[logging_level]}")
 
         if not os.path.exists(self.keys_dir) or not os.listdir(self.keys_dir):
@@ -633,10 +643,15 @@ class Forwarder(Process):
             # and the task result will not be acked if this fails
             task_group_id = task.task_group_id
             if task_group_id:
+                # This argument expects milliseconds, so multiply by 1000
+                queue_args = {
+                    "x-expires": int(self.rabbitmq_queue_ttl * 1000),
+                }
+
                 connection = pika.BlockingConnection(self.rabbitmq_conn_params)
                 channel = connection.channel()
                 channel.exchange_declare(exchange="tasks", exchange_type="direct")
-                channel.queue_declare(queue=task_group_id)
+                channel.queue_declare(queue=task_group_id, arguments=queue_args)
                 channel.queue_bind(task_group_id, "tasks")
 
                 # important: the FuncX client must be capable of receiving the same

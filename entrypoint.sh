@@ -25,4 +25,4 @@ if [[ -z "${ADVERTISED_FORWARDER_ADDRESS}" ]]; then
 fi
 
 
-forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmquri $RABBITMQ_URI -d --endpoint-base-port ${ENDPOINT_BASE_PORT}
+forwarder-service -a $ADVERTISED_FORWARDER_ADDRESS -p 8080 --redishost $REDIS_HOST --redisport $REDIS_PORT --rabbitmquri $RABBITMQ_URI -d --endpoint-base-port ${ENDPOINT_BASE_PORT} --rabbitmq_queue_ttl $RABBITMQ_QUEUE_TTL

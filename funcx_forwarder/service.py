@@ -195,6 +195,14 @@ def cli_run():
         "-d", "--debug", action="store_true", help="Enables debug logging"
     )
     parser.add_argument(
+        "--rabbitmq_queue_ttl",
+        required=True,
+        help=(
+            "Set RabbitMQ queue TTL in seconds "
+            "(must match websocket service queue TTL)"
+        ),
+    )
+    parser.add_argument(
         "-v", "--version", action="store_true", help="Print version information"
     )
     parser.add_argument(
@@ -237,6 +245,7 @@ def cli_run():
         args.address,
         args.redishost,
         rabbitmq_conn_params,
+        int(args.rabbitmq_queue_ttl),
         endpoint_ports=range(args.endpoint_base_port, args.endpoint_base_port + 3),
         logging_level=logging_level,
         redis_port=args.redisport,
