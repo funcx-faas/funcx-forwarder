@@ -11,8 +11,7 @@ REQUIRES = [
     "texttable>=1.6.4,<2",
     "redis==3.5.3",
     "funcx-common[redis,boto3]==0.0.11",
-    "funcx @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx&subdirectory=funcx_sdk",  # noqa: E501
-    "funcx-endpoint @ git+https://github.com/funcx-faas/funcX.git@main#egg=funcx-endpoint&subdirectory=funcx_endpoint",  # noqa: E501
+    "funcx-endpoint==0.3.4",
     "pyzmq==22.0.3",
     "pika==1.2.0",
     "python-json-logger==2.0.1",

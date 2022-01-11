@@ -1,7 +1,6 @@
 #!/bin/bash
 set -ex
 
-python3 -c "import funcx; print('funcx Version : ', funcx.__version__)"
 python3 -c "import funcx_endpoint; print('funcx_endpoint Version : ', funcx_endpoint.__version__)"
 python3 -c "import funcx_forwarder; print('funcx_forwarder Version : ', funcx_forwarder.__version__)"
 
