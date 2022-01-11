@@ -5,6 +5,7 @@ import queue
 import sys
 import threading
 import time
+from datetime import timedelta
 import typing as t
 from multiprocessing import Event, Process
 
@@ -108,7 +109,7 @@ class Forwarder(Process):
         redis_port: int = 6379,
         logging_level=logging.INFO,
         heartbeat_period=30,
-        result_ttl: int = 3600,
+        result_ttl: int = int(timedelta(weeks=2).total_seconds),
         keys_dir=None,
     ):
         """
