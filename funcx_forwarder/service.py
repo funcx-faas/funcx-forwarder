@@ -196,7 +196,7 @@ def cli_run():
     )
     parser.add_argument(
         "--rabbitmq_queue_ttl",
-        required=True,
+        default=604800,
         help=(
             "Set RabbitMQ queue TTL in seconds "
             "(must match websocket service queue TTL)"
