@@ -11,7 +11,7 @@ REQUIRES = [
     "texttable>=1.6.4,<2",
     "redis==3.5.3",
     "funcx-common[redis,boto3]==0.0.11",
-    "funcx-endpoint==0.3.4",
+    "funcx-endpoint==0.3.5",
     "pyzmq==22.0.3",
     "pika==1.2.0",
     "python-json-logger==2.0.1",
