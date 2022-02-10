@@ -287,7 +287,9 @@ class Forwarder(Process):
     def update_endpoint_metadata(self, endpoint_id, endpoint_address):
         """Geo locate the endpoint and push as metadata into redis"""
         try:
-            resp = requests.get(f"http://ipinfo.io/{endpoint_address}/json")
+            resp = requests.get(
+                f"http://ipinfo.io/{endpoint_address}/json", timeout=0.5
+            )
             self.endpoint_db.set_endpoint_metadata(endpoint_id, resp.json())
         except Exception:
             logger.error(f"Failed to geo locate {endpoint_address}")
