@@ -402,7 +402,7 @@ class Forwarder(Process):
         except Exception:
             logger.exception("Caught exception while waiting for registration")
 
-    def log_task_transition(self, task, transition_name, task_times={}):
+    def log_task_transition(self, task, transition_name, task_times=None):
         extra_logging = {
             "user_id": task.user_id,
             "task_id": task.task_id,
