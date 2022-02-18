@@ -582,7 +582,7 @@ class Forwarder(Process):
                 return
 
             task_id = message["task_id"]
-            task_times = message.get('times', {})
+            task_times = message.get("times", {})
 
             if not RedisTask.exists(self.redis_client, task_id):
                 logger.warning(
