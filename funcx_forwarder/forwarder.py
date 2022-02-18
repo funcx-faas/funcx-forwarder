@@ -402,7 +402,7 @@ class Forwarder(Process):
         except Exception:
             logger.exception("Caught exception while waiting for registration")
 
-    def log_task_transition(self, task, transition_name):
+    def log_task_transition(self, task, transition_name, task_times={}):
         extra_logging = {
             "user_id": task.user_id,
             "task_id": task.task_id,
@@ -411,6 +411,7 @@ class Forwarder(Process):
             "endpoint_id": task.endpoint,
             "container_id": task.container,
             "log_type": "task_transition",
+            "times": task_times,
         }
         logger.info(transition_name, extra=extra_logging)
 
@@ -581,6 +582,7 @@ class Forwarder(Process):
                 return
 
             task_id = message["task_id"]
+            task_times = message.get('times', {})
 
             if not RedisTask.exists(self.redis_client, task_id):
                 logger.warning(
@@ -650,7 +652,7 @@ class Forwarder(Process):
                 )
                 connection.close()
 
-                self.log_task_transition(task, "result_enqueued")
+                self.log_task_transition(task, "result_enqueued", task_times)
 
             # internally, the task is only considered complete when both critical
             # sections above have succeeded (redis data is sent and the task_id is
