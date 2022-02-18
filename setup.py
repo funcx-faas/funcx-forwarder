@@ -3,6 +3,7 @@ import os
 from setuptools import find_packages, setup
 
 REQUIRES = [
+    "itsdangerous==2.0.1",
     "flask==1.1.2",
     "requests>=2.24.0,<3",
     "jsonschema==3.2.0",
